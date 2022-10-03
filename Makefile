@@ -5,7 +5,8 @@ CGO_ENABLED=0
 GOOS=linux
 # Ignore errors if there are no images.
 CONTROL_PLANE_IMAGES=./control-plane/cmd/kafka-controller ./control-plane/cmd/webhook-kafka ./control-plane/cmd/post-install
-TEST_IMAGES=$(shell find ./test/test_images ./vendor/knative.dev/reconciler-test/cmd ./vendor/knative.dev/eventing/test/test_images -mindepth 1 -maxdepth 1 -type d 2> /dev/null)
+TEST_IMAGES=$(shell find ./test/test_images -mindepth 1 -maxdepth 1 -type d 2> /dev/null)
+TEST_IMAGES_ALL=$(shell find ./test/test_images ./vendor/knative.dev/reconciler-test/cmd ./vendor/knative.dev/eventing/test/test_images -mindepth 1 -maxdepth 1 -type d 2> /dev/null)
 BRANCH=
 TEST=
 IMAGE=
@@ -45,6 +46,12 @@ test-images:
 		KO_DOCKER_REPO=$(DOCKER_REPO_OVERRIDE) ko resolve --tags=$(TEST_IMAGE_TAG) $(KO_FLAGS) -RBf $$img || exit $?; \
 	done
 .PHONY: test-images
+
+test-images-all:
+	for img in $(TEST_IMAGES_ALL); do \
+		KO_DOCKER_REPO=$(DOCKER_REPO_OVERRIDE) ko resolve --tags=$(TEST_IMAGE_TAG) $(KO_FLAGS) -RBf $$img || exit $?; \
+	done
+.PHONY: test-images-all
 
 test-image-single:
 	KO_DOCKER_REPO=$(DOCKER_REPO_OVERRIDE) ko resolve --tags=$(TEST_IMAGE_TAG) $(KO_FLAGS) -RBf test/test_images/$(IMAGE)
