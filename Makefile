@@ -42,7 +42,7 @@ test-reconciler:
 # Requires ko 0.2.0 or newer.
 test-images:
 	for img in $(TEST_IMAGES); do \
-		KO_DOCKER_REPO=$(DOCKER_REPO_OVERRIDE) ko resolve --tags=$(TEST_IMAGE_TAG) $(KO_FLAGS) -RBf $$img ; \
+		KO_DOCKER_REPO=$(DOCKER_REPO_OVERRIDE) ko resolve --tags=$(TEST_IMAGE_TAG) $(KO_FLAGS) -RBf $$img || exit $?; \
 	done
 .PHONY: test-images
 
