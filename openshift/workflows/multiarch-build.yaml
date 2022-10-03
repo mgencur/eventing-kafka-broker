@@ -2,7 +2,7 @@ name: Multiarch builds
 
 on:
   pull_request_target:
-    types: [ closed ]
+    #types: [ closed ]
     branches: [ 'release-v*' ]
 
 defaults:
@@ -14,7 +14,7 @@ jobs:
     name: Build test images
     # Run this only after the pull request was merged. In that case it should be safe to
     # run on pull_request_target event with privileged access to the repository and secrets.
-    if: github.event.pull_request.merged == true
+    #if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - name: Setup Golang
