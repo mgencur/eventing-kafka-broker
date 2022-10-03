@@ -7,3 +7,4 @@ on:
 jobs:
   multiarch-build:
     uses: mgencur/hack/.github/workflows/multiarch-build.yaml@multiarch_build_action
+    secrets: inherit
