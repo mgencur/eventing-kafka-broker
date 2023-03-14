@@ -27,3 +27,11 @@ data:
   {{ if .replicationFactor }}
   default.topic.replication.factor: "{{ .replicationFactor }}"
   {{ end }}
+  {{ if .kafkaChannel }}
+  channel-template-spec: |
+    apiVersion: messaging.knative.dev/{{ .kafkaChannel.version }}
+    kind: KafkaChannel
+    spec:
+      numPartitions: {{ .kafkaChannel.numPartitions }}
+      replicationFactor: {{ .kafkaChannel.replicationFactor }}
+  {{ end }}

@@ -20,6 +20,7 @@ import (
 	"context"
 	"embed"
 
+	"knative.dev/eventing-kafka/test/rekt/resources/kafkachannel"
 	"knative.dev/reconciler-test/pkg/feature"
 	"knative.dev/reconciler-test/pkg/manifest"
 )
@@ -59,5 +60,15 @@ func WithNumPartitions(numPartitions int32) manifest.CfgFn {
 func WithBootstrapServer(bootstrapServer string) manifest.CfgFn {
 	return func(cfg map[string]interface{}) {
 		cfg["bootstrapServer"] = bootstrapServer
+	}
+}
+
+func WithKafkaChannelMTBroker() manifest.CfgFn {
+	return func(cfg map[string]interface{}) {
+		cfg["kafkaChannel"] = map[string]interface{}{
+			"version":           kafkachannel.GVR().Version,
+			"numPartitions":     1,
+			"replicationFactor": 1,
+		}
 	}
 }
