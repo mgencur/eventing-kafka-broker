@@ -96,3 +96,31 @@ func TestKafkaSourceInitialOffsetEarliest(t *testing.T) {
 	env.Test(ctx, t, features.SetupKafkaTopicWithEvents(2, topic))
 	env.Test(ctx, t, features.KafkaSourceInitialOffsetEarliest(2, topic))
 }
+
+func TestKafkaSourceAuth(t *testing.T) {
+	t.Parallel()
+
+	ctx, env := global.Environment(
+		knative.WithKnativeNamespace(system.Namespace()),
+		knative.WithLoggingConfig,
+		knative.WithTracingConfig,
+		k8s.WithEventListener,
+		environment.Managed(t),
+	)
+
+	topic := feature.MakeRandomK8sName("topic")
+
+	// TODO: Make sure SINK can authenticate (-> not required, we can send to 9092 (plain)
+	env.Test(ctx, t, features.SetupKafkaTopicWithEvents(1, topic))
+	env.Test(ctx, t, features.TestKafkaSourceAuth(topic, features.SASLMech))
+	// create FeatureSet that:
+	// creates topic with event
+	// creates kafkasource
+	// asserts event
+	// then create
+
+	// I have to create reusable FeatureSets for s-o
+}
+
+// TODO: Test other auths: TLSMech, Plain
+// TODO: Test different types of events (see the original test)

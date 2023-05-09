@@ -25,13 +25,16 @@ import (
 	cetest "github.com/cloudevents/sdk-go/v2/test"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"knative.dev/eventing-kafka-broker/test/rekt/features/featuressteps"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 	kubeclient "knative.dev/pkg/client/injection/kube/client"
+	"knative.dev/pkg/system"
 	"knative.dev/reconciler-test/pkg/environment"
 	"knative.dev/reconciler-test/pkg/eventshub"
 	"knative.dev/reconciler-test/pkg/eventshub/assert"
 	"knative.dev/reconciler-test/pkg/feature"
 	"knative.dev/reconciler-test/pkg/knative"
+	"knative.dev/reconciler-test/pkg/manifest"
 	"knative.dev/reconciler-test/pkg/resources/service"
 
 	internalscg "knative.dev/eventing-kafka-broker/control-plane/pkg/apis/internals/kafka/eventing/v1alpha1"
@@ -45,6 +48,14 @@ import (
 	"knative.dev/eventing-kafka-broker/control-plane/pkg/contract"
 	"knative.dev/eventing-kafka-broker/control-plane/pkg/reconciler/base"
 	testingpkg "knative.dev/eventing-kafka-broker/test/pkg"
+)
+
+const (
+	saslSecretName = "strimzi-sasl-secret"
+	tlsSecretName  = "strimzi-tls-secret"
+	SASLMech       = "sasl"
+	TLSMech        = "tls"
+	PlainMech      = "plain"
 )
 
 func SetupAndCleanupKafkaSources(prefix string, n int) *feature.Feature {
@@ -247,4 +258,47 @@ func compareConsumerGroup(source string, cmp func(*internalscg.ConsumerGroup) er
 			t.Error(err)
 		}
 	}
+}
+
+func TestKafkaSourceAuth(topic, auth string) *feature.Feature {
+	f := feature.NewFeatureNamed("KafkaSourceWithAuth")
+
+	name := feature.MakeRandomK8sName("source")
+	sink := feature.MakeRandomK8sName("sink")
+
+	f.Setup("install sink", eventshub.Install(sink, eventshub.StartReceiver))
+	f.Setup("install kafka topic", kafkatopic.Install(topic))
+
+	opts := []manifest.CfgFn{
+		kafkasource.WithSink(service.AsKReference(sink), ""),
+		kafkasource.WithTopics([]string{topic}),
+	}
+	switch auth {
+	case TLSMech:
+		f.Setup("Create TLS secret", featuressteps.CopySecretInTestNamespace(system.Namespace(), tlsSecretName))
+		opts = append(opts, kafkasource.WithBootstrapServers(testingpkg.BootstrapServersSslArr),
+			kafkasource.WithTLSCACert(tlsSecretName, "ca.crt"),
+			kafkasource.WithTLSCert(tlsSecretName, "user.crt"),
+			kafkasource.WithTLSKey(tlsSecretName, "user.key"),
+			kafkasource.WithTLSEnabled(),
+			kafkasource.WithTLSCACert(tlsSecretName, "ca.crt"),
+		)
+	case SASLMech:
+		f.Setup("Create SASL secret", featuressteps.CopySecretInTestNamespace(system.Namespace(), saslSecretName))
+		opts = append(opts, kafkasource.WithBootstrapServers(testingpkg.BootstrapServersSslSaslScramArr),
+			kafkasource.WithSASLEnabled(),
+			kafkasource.WithSASLUser(saslSecretName, "user"),
+			kafkasource.WithSASLPassword(saslSecretName, "password"),
+			kafkasource.WithSASLType(saslSecretName, "saslType"),
+			kafkasource.WithTLSEnabled(),
+			kafkasource.WithTLSCACert(saslSecretName, "ca.crt"),
+		)
+	default:
+		opts = append(opts, kafkasource.WithBootstrapServers(testingpkg.BootstrapServersPlaintextArr))
+	}
+
+	f.Setup("install KafkaSource", kafkasource.Install(name, opts...))
+	f.Setup("KafkaSource is ready", kafkasource.IsReady(name))
+
+	return f
 }

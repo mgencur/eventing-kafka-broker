@@ -130,6 +130,7 @@ func BrokerWithTriggersAndKafkaSink(env environment.Environment) *feature.Featur
 	return f
 }
 
+// TODO: count unused
 func SetupKafkaTopicWithEvents(count int, topic string) *feature.Feature {
 
 	f := feature.NewFeatureNamed(fmt.Sprintf("setup Kafka topic with %d events", count))
