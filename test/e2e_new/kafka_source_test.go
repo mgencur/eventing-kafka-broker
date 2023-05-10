@@ -174,3 +174,33 @@ func TestKafkaSourceWithExtensions(t *testing.T) {
 
 	env.TestSet(ctx, t, features.KafkaSourceWithExtensions())
 }
+
+func TestKafkaSourceTLS(t *testing.T) {
+
+	t.Parallel()
+
+	ctx, env := global.Environment(
+		knative.WithKnativeNamespace(system.Namespace()),
+		knative.WithLoggingConfig,
+		knative.WithTracingConfig,
+		k8s.WithEventListener,
+		environment.Managed(t),
+	)
+
+	env.TestSet(ctx, t, features.KafkaSourceTLS())
+}
+
+func TestKafkaSourceSASL(t *testing.T) {
+
+	t.Parallel()
+
+	ctx, env := global.Environment(
+		knative.WithKnativeNamespace(system.Namespace()),
+		knative.WithLoggingConfig,
+		knative.WithTracingConfig,
+		k8s.WithEventListener,
+		environment.Managed(t),
+	)
+
+	env.TestSet(ctx, t, features.KafkaSourceSASL())
+}

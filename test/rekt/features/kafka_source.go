@@ -445,6 +445,38 @@ func KafkaSourceWithExtensions() *feature.FeatureSet {
 	return fs
 }
 
+func KafkaSourceTLS() *feature.FeatureSet {
+	topic := feature.MakeRandomK8sName("topic")
+	e := cetest.FullEvent()
+	fs := &feature.FeatureSet{
+		Name: "KafkaSourceTLS",
+		Features: []*feature.Feature{
+			SetupKafkaTopicWithEvents(1, topic, eventshub.InputEvent(e)),
+			TestKafkaSourceAuth(topic, TLSMech, EmptyExtensions, func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
+				return HasData(e.Data())
+			}),
+		},
+	}
+
+	return fs
+}
+
+func KafkaSourceSASL() *feature.FeatureSet {
+	topic := feature.MakeRandomK8sName("topic")
+	e := cetest.FullEvent()
+	fs := &feature.FeatureSet{
+		Name: "KafkaSourceSASL",
+		Features: []*feature.Feature{
+			SetupKafkaTopicWithEvents(1, topic, eventshub.InputEvent(e)),
+			TestKafkaSourceAuth(topic, SASLMech, EmptyExtensions, func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
+				return HasData(e.Data())
+			}),
+		},
+	}
+
+	return fs
+}
+
 func marshalJSON(val interface{}) string {
 	data, _ := json.Marshal(val)
 	return string(data)
