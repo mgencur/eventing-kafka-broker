@@ -109,7 +109,7 @@ func TestKafkaSourceBinaryEvent(t *testing.T) {
 		environment.Managed(t),
 	)
 
-	env.TestSet(ctx, t, features.KafkaSourceBinaryEvent())
+	env.Test(ctx, t, features.KafkaSourceBinaryEvent())
 }
 
 func TestKafkaSourceStructuredEvent(t *testing.T) {
@@ -123,7 +123,7 @@ func TestKafkaSourceStructuredEvent(t *testing.T) {
 		environment.Managed(t),
 	)
 
-	env.TestSet(ctx, t, features.KafkaSourceStructuredEvent())
+	env.Test(ctx, t, features.KafkaSourceStructuredEvent())
 }
 
 /* KafkaSource dispatcher throws this:
@@ -172,7 +172,7 @@ func TestKafkaSourceWithExtensions(t *testing.T) {
 		environment.Managed(t),
 	)
 
-	env.TestSet(ctx, t, features.KafkaSourceWithExtensions())
+	env.Test(ctx, t, features.KafkaSourceWithExtensions())
 }
 
 func TestKafkaSourceTLS(t *testing.T) {
@@ -187,7 +187,7 @@ func TestKafkaSourceTLS(t *testing.T) {
 		environment.Managed(t),
 	)
 
-	env.TestSet(ctx, t, features.KafkaSourceTLS())
+	env.Test(ctx, t, features.KafkaSourceTLS())
 }
 
 func TestKafkaSourceSASL(t *testing.T) {
@@ -202,5 +202,5 @@ func TestKafkaSourceSASL(t *testing.T) {
 		environment.Managed(t),
 	)
 
-	env.TestSet(ctx, t, features.KafkaSourceSASL())
+	env.Test(ctx, t, features.KafkaSourceSASL())
 }
