@@ -65,10 +65,6 @@ const (
 	PlainMech      = "plain"
 )
 
-var (
-	EmptyExtensions = map[string]string{}
-)
-
 type MatcherGenerator func(cloudEventsSourceName, cloudEventsEventType string) cetest.EventMatcher
 
 func SetupAndCleanupKafkaSources(prefix string, n int) *feature.Feature {
@@ -273,7 +269,11 @@ func compareConsumerGroup(source string, cmp func(*internalscg.ConsumerGroup) er
 	}
 }
 
-func TestKafkaSourceAuth(auth string, extensions map[string]string, senderOpts []eventshub.EventsHubOption, matcherGen MatcherGenerator) *feature.Feature {
+func TestKafkaSourceAuth(auth string,
+	senderOpts []eventshub.EventsHubOption,
+	ksinkOpts []manifest.CfgFn,
+	kafkaSourceExtensions map[string]string,
+	matcherGen MatcherGenerator) *feature.Feature {
 	f := feature.NewFeatureNamed("KafkaSourceWithAuth")
 
 	topic := feature.MakeRandomK8sName("topic")
@@ -284,23 +284,26 @@ func TestKafkaSourceAuth(auth string, extensions map[string]string, senderOpts [
 
 	f.Setup("install kafka topic", kafkatopic.Install(topic))
 	f.Setup("topic is ready", kafkatopic.IsReady(topic))
-	f.Setup("install kafkasink", kafkasink.Install(ksink, topic, testpkg.BootstrapServersPlaintextArr))
+	// Binary content mode is default for Kafka Sink.
+	f.Setup("install kafkasink", kafkasink.Install(ksink, topic,
+		testpkg.BootstrapServersPlaintextArr,
+		ksinkOpts...))
 	f.Setup("KafkaSink is ready", kafkasink.IsReady(ksink))
 
 	f.Setup("install eventshubSink", eventshub.Install(eventshubSink, eventshub.StartReceiver))
 
-	opts := []manifest.CfgFn{
+	kafkaSourceOpts := []manifest.CfgFn{
 		kafkasource.WithSink(service.AsKReference(eventshubSink), ""),
 		kafkasource.WithTopics([]string{topic}),
 	}
-	if len(extensions) != 0 {
-		opts = append(opts, kafkasource.WithExtensions(extensions))
+	if len(kafkaSourceExtensions) != 0 {
+		kafkaSourceOpts = append(kafkaSourceOpts, kafkasource.WithExtensions(kafkaSourceExtensions))
 	}
 
 	switch auth {
 	case TLSMech:
 		f.Setup("Create TLS secret", featuressteps.CopySecretInTestNamespace(system.Namespace(), tlsSecretName))
-		opts = append(opts, kafkasource.WithBootstrapServers(testingpkg.BootstrapServersSslArr),
+		kafkaSourceOpts = append(kafkaSourceOpts, kafkasource.WithBootstrapServers(testingpkg.BootstrapServersSslArr),
 			kafkasource.WithTLSCACert(tlsSecretName, "ca.crt"),
 			kafkasource.WithTLSCert(tlsSecretName, "user.crt"),
 			kafkasource.WithTLSKey(tlsSecretName, "user.key"),
@@ -309,7 +312,7 @@ func TestKafkaSourceAuth(auth string, extensions map[string]string, senderOpts [
 		)
 	case SASLMech:
 		f.Setup("Create SASL secret", featuressteps.CopySecretInTestNamespace(system.Namespace(), saslSecretName))
-		opts = append(opts, kafkasource.WithBootstrapServers(testingpkg.BootstrapServersSslSaslScramArr),
+		kafkaSourceOpts = append(kafkaSourceOpts, kafkasource.WithBootstrapServers(testingpkg.BootstrapServersSslSaslScramArr),
 			kafkasource.WithSASLEnabled(),
 			kafkasource.WithSASLUser(saslSecretName, "user"),
 			kafkasource.WithSASLPassword(saslSecretName, "password"),
@@ -318,10 +321,10 @@ func TestKafkaSourceAuth(auth string, extensions map[string]string, senderOpts [
 			kafkasource.WithTLSCACert(saslSecretName, "ca.crt"),
 		)
 	default:
-		opts = append(opts, kafkasource.WithBootstrapServers(testingpkg.BootstrapServersPlaintextArr))
+		kafkaSourceOpts = append(kafkaSourceOpts, kafkasource.WithBootstrapServers(testingpkg.BootstrapServersPlaintextArr))
 	}
 
-	f.Setup("install KafkaSource", kafkasource.Install(kafkaSource, opts...))
+	f.Setup("install KafkaSource", kafkasource.Install(kafkaSource, kafkaSourceOpts...))
 	f.Setup("KafkaSource is ready", kafkasource.IsReady(kafkaSource))
 
 	options := []eventshub.EventsHubOption{
@@ -359,7 +362,6 @@ func KafkaSourceBinaryEvent() *feature.Feature {
 		eventshub.InputBody(marshalJSON(map[string]string{
 			"hello": "Francesco",
 		})),
-		eventshub.InputMethod("POST"),
 	}
 	matcherGen := func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
 		return AllOf(
@@ -375,7 +377,7 @@ func KafkaSourceBinaryEvent() *feature.Feature {
 		)
 	}
 
-	return TestKafkaSourceAuth(PlainMech, EmptyExtensions, senderOptions, matcherGen)
+	return TestKafkaSourceAuth(PlainMech, senderOptions, nil, nil, matcherGen)
 }
 
 func KafkaSourceStructuredEvent() *feature.Feature {
@@ -396,8 +398,8 @@ func KafkaSourceStructuredEvent() *feature.Feature {
 			"comexampleextension1": "value",
 			"comexampleothervalue": 5,
 		})),
-		eventshub.InputMethod("POST"),
 	}
+	ksinkOpts := []manifest.CfgFn{kafkasink.WithContentMode("structured")}
 	matcherGen := func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
 		return AllOf(
 			HasSpecVersion(cloudevents.VersionV1),
@@ -412,8 +414,7 @@ func KafkaSourceStructuredEvent() *feature.Feature {
 			HasExtension("comexampleothervalue", "5"),
 		)
 	}
-
-	return TestKafkaSourceAuth(PlainMech, EmptyExtensions, senderOptions, matcherGen)
+	return TestKafkaSourceAuth(PlainMech, senderOptions, ksinkOpts, nil, matcherGen)
 }
 
 func KafkaSourceWithExtensions() *feature.Feature {
@@ -424,28 +425,23 @@ func KafkaSourceWithExtensions() *feature.Feature {
 			"type":        "com.github.pull.create",
 			"source":      "https://github.com/cloudevents/spec/pull",
 			"id":          "A234-1234-1234",
-			"data": map[string]string{
-				"hello": "Francesco",
-			},
 		})),
-		eventshub.InputMethod("POST"),
+	}
+	kafkaSourceExtensions := map[string]string{
+		"comexampleextension1": "value",
+		"comexampleothervalue": "5",
 	}
 	matcherGen := func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
 		return AllOf(
 			HasSpecVersion(cloudevents.VersionV1),
-			HasData([]byte(`{"hello":"Francesco"}`)),
 			HasType("com.github.pull.create"),
 			HasSource("https://github.com/cloudevents/spec/pull"),
 			HasExtension("comexampleextension1", "value"),
 			HasExtension("comexampleothervalue", "5"),
 		)
 	}
-	extensions := map[string]string{
-		"comexampleextension1": "value",
-		"comexampleothervalue": "5",
-	}
 
-	return TestKafkaSourceAuth(PlainMech, extensions, senderOptions, matcherGen)
+	return TestKafkaSourceAuth(PlainMech, senderOptions, nil, kafkaSourceExtensions, matcherGen)
 }
 
 func KafkaSourceTLS() *feature.Feature {
@@ -457,7 +453,7 @@ func KafkaSourceTLS() *feature.Feature {
 		return HasData(e.Data())
 	}
 
-	return TestKafkaSourceAuth(TLSMech, EmptyExtensions, senderOptions, matcherGen)
+	return TestKafkaSourceAuth(TLSMech, senderOptions, nil, nil, matcherGen)
 }
 
 func KafkaSourceSASL() *feature.Feature {
@@ -469,7 +465,7 @@ func KafkaSourceSASL() *feature.Feature {
 		return HasData(e.Data())
 	}
 
-	return TestKafkaSourceAuth(SASLMech, EmptyExtensions, senderOptions, matcherGen)
+	return TestKafkaSourceAuth(SASLMech, senderOptions, nil, nil, matcherGen)
 }
 
 func marshalJSON(val interface{}) string {
