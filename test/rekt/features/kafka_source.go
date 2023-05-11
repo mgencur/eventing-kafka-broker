@@ -424,12 +424,16 @@ func KafkaSourceWithExtensions() *feature.Feature {
 			"type":        "com.github.pull.create",
 			"source":      "https://github.com/cloudevents/spec/pull",
 			"id":          "A234-1234-1234",
+			"data": map[string]string{
+				"hello": "Francesco",
+			},
 		})),
 		eventshub.InputMethod("POST"),
 	}
 	matcherGen := func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
 		return AllOf(
 			HasSpecVersion(cloudevents.VersionV1),
+			HasData([]byte(`{"hello":"Francesco"}`)),
 			HasType("com.github.pull.create"),
 			HasSource("https://github.com/cloudevents/spec/pull"),
 			HasExtension("comexampleextension1", "value"),
