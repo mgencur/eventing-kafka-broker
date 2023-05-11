@@ -41,7 +41,6 @@ import (
 const (
 	KafkaBootstrapUrlPlain = "my-cluster-kafka-bootstrap.kafka.svc:9092"
 	kafkaBootstrapUrlTLS   = "my-cluster-kafka-bootstrap.kafka.svc:9093"
-	//kafkaBootstrapUrlSASL  = "my-cluster-kafka-bootstrap.kafka.svc:9094"
 
 	KafkaClusterName      = "my-cluster"
 	KafkaClusterNamespace = "kafka"

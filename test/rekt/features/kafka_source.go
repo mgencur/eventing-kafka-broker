@@ -274,6 +274,7 @@ func TestKafkaSourceAuth(auth string,
 	ksinkOpts []manifest.CfgFn,
 	kafkaSourceExtensions map[string]string,
 	matcherGen MatcherGenerator) *feature.Feature {
+
 	f := feature.NewFeatureNamed("KafkaSourceWithAuth")
 
 	topic := feature.MakeRandomK8sName("topic")
@@ -284,13 +285,14 @@ func TestKafkaSourceAuth(auth string,
 
 	f.Setup("install kafka topic", kafkatopic.Install(topic))
 	f.Setup("topic is ready", kafkatopic.IsReady(topic))
+
 	// Binary content mode is default for Kafka Sink.
 	f.Setup("install kafkasink", kafkasink.Install(ksink, topic,
 		testpkg.BootstrapServersPlaintextArr,
 		ksinkOpts...))
 	f.Setup("KafkaSink is ready", kafkasink.IsReady(ksink))
 
-	f.Setup("install eventshubSink", eventshub.Install(eventshubSink, eventshub.StartReceiver))
+	f.Setup("install eventshub sink", eventshub.Install(eventshubSink, eventshub.StartReceiver))
 
 	kafkaSourceOpts := []manifest.CfgFn{
 		kafkasource.WithSink(service.AsKReference(eventshubSink), ""),
@@ -324,8 +326,8 @@ func TestKafkaSourceAuth(auth string,
 		kafkaSourceOpts = append(kafkaSourceOpts, kafkasource.WithBootstrapServers(testingpkg.BootstrapServersPlaintextArr))
 	}
 
-	f.Setup("install KafkaSource", kafkasource.Install(kafkaSource, kafkaSourceOpts...))
-	f.Setup("KafkaSource is ready", kafkasource.IsReady(kafkaSource))
+	f.Setup("install kafka source", kafkasource.Install(kafkaSource, kafkaSourceOpts...))
+	f.Setup("kafka source is ready", kafkasource.IsReady(kafkaSource))
 
 	options := []eventshub.EventsHubOption{
 		eventshub.StartSenderToResource(kafkasink.GVR(), ksink),
@@ -333,7 +335,7 @@ func TestKafkaSourceAuth(auth string,
 		eventshub.SendMultipleEvents(1, time.Millisecond),
 	}
 	options = append(options, senderOpts...)
-	f.Requirement("install sender for ksink", eventshub.Install(eventshubSource, options...))
+	f.Requirement("install eventshub source for ksink", eventshub.Install(eventshubSource, options...))
 
 	f.Assert("sink receives event", matchEvent(eventshubSink, kafkaSource, topic, matcherGen))
 
