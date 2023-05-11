@@ -25,7 +25,6 @@ import (
 
 	sourcesv1beta1 "knative.dev/eventing-kafka-broker/control-plane/pkg/apis/sources/v1beta1"
 
-	cloudevents "github.com/cloudevents/sdk-go/v2"
 	. "github.com/cloudevents/sdk-go/v2/test"
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
@@ -57,33 +56,6 @@ type SourceTestScope func(auth, testCase, version string) bool
 
 // AssureKafkaSourceIsOperational assures that KafkaSource works as intended.
 func AssureKafkaSourceIsOperational(t *testing.T, scope SourceTestScope) {
-	//eventTime, _ := cetypes.ParseTime("2018-04-05T17:31:00Z")
-
-	auths := map[string]struct {
-		auth authSetup
-	}{
-		"plain": {
-			auth: authSetup{
-				bootStrapServer: KafkaBootstrapUrlPlain,
-				SASLEnabled:     false,
-				TLSEnabled:      false,
-			},
-		},
-		//"s512": {
-		//	auth: authSetup{
-		//		bootStrapServer: kafkaBootstrapUrlSASL,
-		//		SASLEnabled:     true,
-		//		TLSEnabled:      false,
-		//	},
-		//},
-		//"tls": {
-		//	auth: authSetup{
-		//		bootStrapServer: kafkaBootstrapUrlTLS,
-		//		SASLEnabled:     false,
-		//		TLSEnabled:      true,
-		//	},
-		//},
-	}
 	tests := map[string]struct {
 		messageKey     string
 		messageHeaders map[string]string
@@ -91,99 +63,80 @@ func AssureKafkaSourceIsOperational(t *testing.T, scope SourceTestScope) {
 		matcherGen     func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher
 		extensions     map[string]string
 	}{
-		//"no_event": {
-		//	messageKey: "0",
-		//	messageHeaders: map[string]string{
-		//		"content-type": "application/json",
-		//	},
-		//	messagePayload: `{"value":5}`,
-		//	matcherGen: func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
-		//		return AllOf(
-		//			HasSource(cloudEventsSourceName),
-		//			HasType(cloudEventsEventType),
-		//			HasDataContentType("application/json"),
-		//			HasData([]byte(`{"value":5}`)),
-		//			HasExtension("key", "0"),
-		//		)
-		//	},
-		//},
-		//"no_event_no_content_type": {
-		//	messageKey:     "0",
-		//	messagePayload: `{"value":5}`,
-		//	matcherGen: func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
-		//		return AllOf(
-		//			HasSource(cloudEventsSourceName),
-		//			HasType(cloudEventsEventType),
-		//			HasData([]byte(`{"value":5}`)),
-		//			HasExtension("key", "0"),
-		//		)
-		//	},
-		//},
-		//"no_event_content_type_or_key": {
-		//	messagePayload: `{"value":5}`,
-		//	matcherGen: func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
-		//		return AllOf(
-		//			HasSource(cloudEventsSourceName),
-		//			HasType(cloudEventsEventType),
-		//			HasData([]byte(`{"value":5}`)),
-		//		)
-		//	},
-		//},
-		//"no_event_with_text_plain_body": {
-		//	messageKey: "0",
-		//	messageHeaders: map[string]string{
-		//		"content-type": "text/plain",
-		//	},
-		//	messagePayload: "simple 10",
-		//	matcherGen: func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
-		//		return AllOf(
-		//			HasSource(cloudEventsSourceName),
-		//			HasType(cloudEventsEventType),
-		//			HasDataContentType("text/plain"),
-		//			HasData([]byte("simple 10")),
-		//			HasExtension("key", "0"),
-		//		)
-		//	},
-		//},
-		"with_extensions": {
+		"no_event": {
+			messageKey: "0",
 			messageHeaders: map[string]string{
-				"content-type": "application/cloudevents+json",
+				"content-type": "application/json",
 			},
-			messagePayload: mustJsonMarshal(t, map[string]interface{}{
-				"specversion": "1.0",
-				"type":        "com.github.pull.create",
-				"source":      "https://github.com/cloudevents/spec/pull",
-				"id":          "A234-1234-1234",
-			}),
-			extensions: map[string]string{
-				"comexampleextension1": "value",
-				"comexampleothervalue": "5",
-			},
+			messagePayload: `{"value":5}`,
 			matcherGen: func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
 				return AllOf(
-					HasSpecVersion(cloudevents.VersionV1),
-					HasType("com.github.pull.create"),
-					HasSource("https://github.com/cloudevents/spec/pull"),
-					HasExtension("comexampleextension1", "value"),
-					HasExtension("comexampleothervalue", "5"),
+					HasSource(cloudEventsSourceName),
+					HasType(cloudEventsEventType),
+					HasDataContentType("application/json"),
+					HasData([]byte(`{"value":5}`)),
+					HasExtension("key", "0"),
+				)
+			},
+		},
+		"no_event_no_content_type": {
+			messageKey:     "0",
+			messagePayload: `{"value":5}`,
+			matcherGen: func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
+				return AllOf(
+					HasSource(cloudEventsSourceName),
+					HasType(cloudEventsEventType),
+					HasData([]byte(`{"value":5}`)),
+					HasExtension("key", "0"),
+				)
+			},
+		},
+		"no_event_content_type_or_key": {
+			messagePayload: `{"value":5}`,
+			matcherGen: func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
+				return AllOf(
+					HasSource(cloudEventsSourceName),
+					HasType(cloudEventsEventType),
+					HasData([]byte(`{"value":5}`)),
+				)
+			},
+		},
+		"no_event_with_text_plain_body": {
+			messageKey: "0",
+			messageHeaders: map[string]string{
+				"content-type": "text/plain",
+			},
+			messagePayload: "simple 10",
+			matcherGen: func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
+				return AllOf(
+					HasSource(cloudEventsSourceName),
+					HasType(cloudEventsEventType),
+					HasDataContentType("text/plain"),
+					HasData([]byte("simple 10")),
+					HasExtension("key", "0"),
 				)
 			},
 		},
 	}
-	for authName, auth := range auths {
-		for testcase, test := range tests {
-			test := test
-			name := testcase + "_" + authName
-			for _, version := range []string{"v1beta1"} {
-				testName := name + "-" + version
-				if !scope(authName, testcase, version) {
-					t.Log("Skipping the test case, because it's out of configured scope: ", testName)
-					continue
-				}
-				t.Run(testName, func(t *testing.T) {
-					testKafkaSource(t, name, version, test.messageKey, test.messageHeaders, test.messagePayload, test.matcherGen, auth.auth, test.extensions)
-				})
+
+	auth := authSetup{
+		bootStrapServer: KafkaBootstrapUrlPlain,
+		SASLEnabled:     false,
+		TLSEnabled:      false,
+	}
+	authName := "plain"
+	for testcase, test := range tests {
+		test := test
+		name := testcase + "_" + authName
+		for _, version := range []string{"v1beta1"} {
+			testName := name + "-" + version
+			if !scope(authName, testcase, version) {
+				t.Log("Skipping the test case, because it's out of configured scope: ", testName)
+				continue
 			}
+			t.Run(testName, func(t *testing.T) {
+				testKafkaSource(t, name, version, test.messageKey, test.messageHeaders, test.messagePayload, test.matcherGen, auth, test.extensions)
+			})
 		}
 	}
 }
