@@ -29,7 +29,6 @@ import (
 	cetypes "github.com/cloudevents/sdk-go/v2/types"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	sourcesv1beta1 "knative.dev/eventing-kafka-broker/control-plane/pkg/apis/sources/v1beta1"
 	testpkg "knative.dev/eventing-kafka-broker/test/pkg"
 	"knative.dev/eventing-kafka-broker/test/rekt/features/featuressteps"
 	"knative.dev/eventing-kafka-broker/test/rekt/resources/kafkasink"
@@ -269,33 +268,33 @@ func compareConsumerGroup(source string, cmp func(*internalscg.ConsumerGroup) er
 	}
 }
 
-func TestKafkaSourceAuth(auth string,
+func testKafkaSourceAuth(auth string,
+	kafkaSource string,
+	kafkaSink string,
 	senderOpts []eventshub.EventsHubOption,
 	ksinkOpts []manifest.CfgFn,
 	kafkaSourceExtensions map[string]string,
-	matcherGen MatcherGenerator) *feature.Feature {
+	matcher cetest.EventMatcher) *feature.Feature {
 
 	f := feature.NewFeatureNamed("KafkaSourceWithAuth")
 
 	topic := feature.MakeRandomK8sName("topic")
-	kafkaSource := feature.MakeRandomK8sName("kafkaSource")
-	eventshubSink := feature.MakeRandomK8sName("eventshubSink")
-	ksink := feature.MakeRandomK8sName("ksink")
-	eventshubSource := feature.MakeRandomK8sName("kafkaSource-to-ksink")
+	eventshubReceiver := feature.MakeRandomK8sName("eventshub-receiver")
+	eventshubSender := feature.MakeRandomK8sName("eventshub-sender")
 
 	f.Setup("install kafka topic", kafkatopic.Install(topic))
 	f.Setup("topic is ready", kafkatopic.IsReady(topic))
 
 	// Binary content mode is default for Kafka Sink.
-	f.Setup("install kafkasink", kafkasink.Install(ksink, topic,
+	f.Setup("install kafkasink", kafkasink.Install(kafkaSink, topic,
 		testpkg.BootstrapServersPlaintextArr,
 		ksinkOpts...))
-	f.Setup("KafkaSink is ready", kafkasink.IsReady(ksink))
+	f.Setup("kafkasink is ready", kafkasink.IsReady(kafkaSink))
 
-	f.Setup("install eventshub sink", eventshub.Install(eventshubSink, eventshub.StartReceiver))
+	f.Setup("install eventshub receiver", eventshub.Install(eventshubReceiver, eventshub.StartReceiver))
 
 	kafkaSourceOpts := []manifest.CfgFn{
-		kafkasource.WithSink(service.AsKReference(eventshubSink), ""),
+		kafkasource.WithSink(service.AsKReference(eventshubReceiver), ""),
 		kafkasource.WithTopics([]string{topic}),
 	}
 	if len(kafkaSourceExtensions) != 0 {
@@ -330,28 +329,25 @@ func TestKafkaSourceAuth(auth string,
 	f.Setup("kafka source is ready", kafkasource.IsReady(kafkaSource))
 
 	options := []eventshub.EventsHubOption{
-		eventshub.StartSenderToResource(kafkasink.GVR(), ksink),
+		eventshub.StartSenderToResource(kafkasink.GVR(), kafkaSink),
 		eventshub.AddSequence,
 		eventshub.SendMultipleEvents(1, time.Millisecond),
 	}
 	options = append(options, senderOpts...)
-	f.Requirement("install eventshub source for ksink", eventshub.Install(eventshubSource, options...))
+	f.Requirement("install eventshub sender", eventshub.Install(eventshubSender, options...))
 
-	f.Assert("sink receives event", matchEvent(eventshubSink, kafkaSource, topic, matcherGen))
+	f.Assert("eventshub receiver gets event", matchEvent(eventshubReceiver, matcher))
 
 	return f
 }
 
-func matchEvent(sink, source, topic string, matcherGen MatcherGenerator) feature.StepFn {
+func matchEvent(sink string, matcher EventMatcher) feature.StepFn {
 	return func(ctx context.Context, t feature.T) {
-		cloudEventsSourceName := sourcesv1beta1.KafkaEventSource(environment.FromContext(ctx).Namespace(), source, topic)
-		cloudEventsEventType := sourcesv1beta1.KafkaEventType
-
-		assert.OnStore(sink).MatchEvent(matcherGen(cloudEventsSourceName, cloudEventsEventType)).Exact(1)(ctx, t)
+		assert.OnStore(sink).MatchEvent(matcher).Exact(1)(ctx, t)
 	}
 }
 
-func KafkaSourceBinaryEvent() *feature.Feature {
+func KafkaSourceBinaryEvent(kafkaSource, kafkaSink string) *feature.Feature {
 	senderOptions := []eventshub.EventsHubOption{
 		eventshub.InputHeader("ce-specversion", "1.0"),
 		eventshub.InputHeader("ce-type", "com.github.pull.create"),
@@ -365,24 +361,24 @@ func KafkaSourceBinaryEvent() *feature.Feature {
 			"hello": "Francesco",
 		})),
 	}
-	matcherGen := func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
-		return AllOf(
-			HasSpecVersion(cloudevents.VersionV1),
-			HasType("com.github.pull.create"),
-			HasSource("github.com/cloudevents/spec/pull"),
-			HasSubject("123"),
-			HasId("A234-1234-1234"),
-			HasDataContentType("application/json"),
-			HasData([]byte(`{"hello":"Francesco"}`)),
-			HasExtension("comexampleextension1", "value"),
-			HasExtension("comexampleothervalue", "5"),
-		)
-	}
+	matcher := AllOf(
+		HasSpecVersion(cloudevents.VersionV1),
+		HasType("com.github.pull.create"),
+		HasSource("github.com/cloudevents/spec/pull"),
+		HasSubject("123"),
+		HasId("A234-1234-1234"),
+		HasDataContentType("application/json"),
+		HasData([]byte(`{"hello":"Francesco"}`)),
+		HasExtension("comexampleextension1", "value"),
+		HasExtension("comexampleothervalue", "5"),
+	)
 
-	return TestKafkaSourceAuth(PlainMech, senderOptions, nil, nil, matcherGen)
+	return testKafkaSourceAuth(PlainMech, kafkaSource, kafkaSink, senderOptions, nil, nil, matcher)
 }
 
 func KafkaSourceStructuredEvent() *feature.Feature {
+	kafkaSource := feature.MakeRandomK8sName("kafkaSource")
+	kafkaSink := feature.MakeRandomK8sName("kafkaSink")
 	eventTime, _ := cetypes.ParseTime("2018-04-05T17:31:00Z")
 	senderOptions := []eventshub.EventsHubOption{
 		eventshub.InputHeader("content-type", "application/cloudevents+json"),
@@ -402,24 +398,25 @@ func KafkaSourceStructuredEvent() *feature.Feature {
 		})),
 	}
 	ksinkOpts := []manifest.CfgFn{kafkasink.WithContentMode("structured")}
-	matcherGen := func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
-		return AllOf(
-			HasSpecVersion(cloudevents.VersionV1),
-			HasType("com.github.pull.create"),
-			HasSource("https://github.com/cloudevents/spec/pull"),
-			HasSubject("123"),
-			HasId("A234-1234-1234"),
-			HasTime(eventTime),
-			HasDataContentType("application/json"),
-			HasData([]byte(`{"hello":"Francesco"}`)),
-			HasExtension("comexampleextension1", "value"),
-			HasExtension("comexampleothervalue", "5"),
-		)
-	}
-	return TestKafkaSourceAuth(PlainMech, senderOptions, ksinkOpts, nil, matcherGen)
+	matcher := AllOf(
+		HasSpecVersion(cloudevents.VersionV1),
+		HasType("com.github.pull.create"),
+		HasSource("https://github.com/cloudevents/spec/pull"),
+		HasSubject("123"),
+		HasId("A234-1234-1234"),
+		HasTime(eventTime),
+		HasDataContentType("application/json"),
+		HasData([]byte(`{"hello":"Francesco"}`)),
+		HasExtension("comexampleextension1", "value"),
+		HasExtension("comexampleothervalue", "5"),
+	)
+
+	return testKafkaSourceAuth(PlainMech, kafkaSource, kafkaSink, senderOptions, ksinkOpts, nil, matcher)
 }
 
 func KafkaSourceWithExtensions() *feature.Feature {
+	kafkaSource := feature.MakeRandomK8sName("kafkaSource")
+	kafkaSink := feature.MakeRandomK8sName("kafkaSink")
 	senderOptions := []eventshub.EventsHubOption{
 		eventshub.InputHeader("content-type", "application/cloudevents+json"),
 		eventshub.InputBody(marshalJSON(map[string]interface{}{
@@ -433,44 +430,90 @@ func KafkaSourceWithExtensions() *feature.Feature {
 		"comexampleextension1": "value",
 		"comexampleothervalue": "5",
 	}
-	matcherGen := func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
-		return AllOf(
-			HasSpecVersion(cloudevents.VersionV1),
-			HasType("com.github.pull.create"),
-			HasSource("https://github.com/cloudevents/spec/pull"),
-			HasExtension("comexampleextension1", "value"),
-			HasExtension("comexampleothervalue", "5"),
-		)
-	}
+	matcher := AllOf(
+		HasSpecVersion(cloudevents.VersionV1),
+		HasType("com.github.pull.create"),
+		HasSource("https://github.com/cloudevents/spec/pull"),
+		HasExtension("comexampleextension1", "value"),
+		HasExtension("comexampleothervalue", "5"),
+	)
 
-	return TestKafkaSourceAuth(PlainMech, senderOptions, nil, kafkaSourceExtensions, matcherGen)
+	return testKafkaSourceAuth(PlainMech, kafkaSource, kafkaSink, senderOptions, nil, kafkaSourceExtensions, matcher)
 }
 
 func KafkaSourceTLS() *feature.Feature {
+	kafkaSource := feature.MakeRandomK8sName("kafkaSource")
+	kafkaSink := feature.MakeRandomK8sName("kafkaSink")
 	e := cetest.FullEvent()
 	senderOptions := []eventshub.EventsHubOption{
 		eventshub.InputEvent(e),
 	}
-	matcherGen := func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
-		return HasData(e.Data())
-	}
+	matcher := HasData(e.Data())
 
-	return TestKafkaSourceAuth(TLSMech, senderOptions, nil, nil, matcherGen)
+	return testKafkaSourceAuth(TLSMech, kafkaSource, kafkaSink, senderOptions, nil, nil, matcher)
 }
 
 func KafkaSourceSASL() *feature.Feature {
+	kafkaSource := feature.MakeRandomK8sName("kafkaSource")
+	kafkaSink := feature.MakeRandomK8sName("kafkaSink")
 	e := cetest.FullEvent()
 	senderOptions := []eventshub.EventsHubOption{
 		eventshub.InputEvent(e),
 	}
-	matcherGen := func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher {
-		return HasData(e.Data())
-	}
+	matcher := HasData(e.Data())
 
-	return TestKafkaSourceAuth(SASLMech, senderOptions, nil, nil, matcherGen)
+	return testKafkaSourceAuth(SASLMech, kafkaSource, kafkaSink, senderOptions, nil, nil, matcher)
 }
 
 func marshalJSON(val interface{}) string {
 	data, _ := json.Marshal(val)
 	return string(data)
+}
+
+func testKafkaSourceAfterUpdate(
+	kafkaSource string,
+	kafkaSink string,
+	senderOpts []eventshub.EventsHubOption,
+	matcher EventMatcher) *feature.Feature {
+
+	f := feature.NewFeatureNamed("KafkaSourceWithAuth")
+
+	eventshubReceiver := feature.MakeRandomK8sName("eventshub-receiver")
+	eventshubSender := feature.MakeRandomK8sName("eventshub-sender")
+
+	f.Setup("install eventshub receiver", eventshub.Install(eventshubReceiver, eventshub.StartReceiver))
+
+	// TODO: Update Source with new eventshubReceiver, and PlainMech
+
+	options := []eventshub.EventsHubOption{
+		eventshub.StartSenderToResource(kafkasink.GVR(), kafkaSink),
+		eventshub.AddSequence,
+		eventshub.SendMultipleEvents(1, time.Millisecond),
+	}
+	options = append(options, senderOpts...)
+	f.Requirement("install eventshub sender for kafka sink", eventshub.Install(eventshubSender, options...))
+
+	f.Assert("sink receives event", matchEvent(eventshubReceiver, matcher))
+
+	return f
+}
+
+func KafkaSourceUpdate(kafkaSource, kafkaSink string) *feature.Feature {
+	senderOptions := []eventshub.EventsHubOption{
+		eventshub.InputHeader("ce-specversion", cloudevents.VersionV1),
+		eventshub.InputHeader("ce-type", "com.github.pull.create"),
+		eventshub.InputHeader("ce-source", "github.com/cloudevents/spec/pull"),
+		eventshub.InputHeader("ce-id", "A234-1234-1234"),
+		eventshub.InputHeader("ce-comexampleextension1", "update"),
+		eventshub.InputBody(marshalJSON(map[string]string{
+			"value": "5",
+		})),
+	}
+	matcher := AllOf(
+		HasSource("github.com/cloudevents/spec/pull"),
+		HasData([]byte(`{"value":"5"}`)),
+		HasExtension("ce-comexampleextension1", "update"),
+	)
+
+	return testKafkaSourceAfterUpdate(kafkaSource, kafkaSink, senderOptions, matcher)
 }

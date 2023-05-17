@@ -109,7 +109,9 @@ func TestKafkaSourceBinaryEvent(t *testing.T) {
 		environment.Managed(t),
 	)
 
-	env.Test(ctx, t, features.KafkaSourceBinaryEvent())
+	kafkaSource := feature.MakeRandomK8sName("kafkaSource")
+
+	env.Test(ctx, t, features.KafkaSourceBinaryEvent(kafkaSource))
 }
 
 func TestKafkaSourceStructuredEvent(t *testing.T) {
@@ -168,4 +170,28 @@ func TestKafkaSourceSASL(t *testing.T) {
 	)
 
 	env.Test(ctx, t, features.KafkaSourceSASL())
+}
+
+func TestKafkaSourceUpdate(t *testing.T) {
+
+	t.Parallel()
+
+	ctx, env := global.Environment(
+		knative.WithKnativeNamespace(system.Namespace()),
+		knative.WithLoggingConfig,
+		knative.WithTracingConfig,
+		k8s.WithEventListener,
+		environment.Managed(t),
+	)
+
+	kafkaSource := feature.MakeRandomK8sName("kafkaSource")
+	kafkaSink := feature.MakeRandomK8sName("kafkaSink")
+
+	// First, send an arbitrary binary event to Kafka and let KafkaSource
+	// forward the event to the sink.
+	env.Test(ctx, t, features.KafkaSourceBinaryEvent(kafkaSource, kafkaSink))
+	// Second, use the same KafkaSource, update it, send a new event to
+	// Kafka (through the same KafkaSink using same Kafka Topic). And verify that
+	// the new event is delivered properly.
+	env.Test(ctx, t, features.KafkaSourceUpdate(kafkaSource, kafkaSink))
 }
