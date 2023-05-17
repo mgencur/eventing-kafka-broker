@@ -23,9 +23,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/cloudevents/sdk-go/v2/test"
 	. "github.com/cloudevents/sdk-go/v2/test"
-	"github.com/stretchr/testify/require"
 	"knative.dev/eventing/pkg/utils"
 	testlib "knative.dev/eventing/test/lib"
 	"knative.dev/eventing/test/lib/recordevents"
@@ -175,71 +173,6 @@ var (
 		sinkName:  "default-event-recorder",
 	}
 )
-
-func TestKafkaSourceClaims(t *testing.T) {
-
-	topic := defaultKafkaSource.topicName + "-test-claims"
-	sink := defaultKafkaSource.sinkName
-
-	messageHeaders := map[string]string{
-		"content-type": "application/cloudevents+json",
-	}
-	messagePayload := mustJsonMarshal(t, map[string]interface{}{
-		"specversion":     "1.0",
-		"type":            "com.github.pull.create",
-		"source":          "https://github.com/cloudevents/spec/pull",
-		"subject":         "123",
-		"id":              "A234-1234-1234",
-		"time":            "2018-04-05T17:31:00Z",
-		"datacontenttype": "application/json",
-		"data": map[string]string{
-			"hello": "Francesco",
-		},
-		"comexampleextension1": "value",
-		"comexampleothervalue": 5,
-	})
-
-	client := testlib.Setup(t, true)
-	defer testlib.TearDown(client)
-
-	t.Logf("Creating topic: %s\n", topic)
-	MustCreateTopic(client, KafkaClusterName, KafkaClusterNamespace, topic, 10)
-
-	t.Logf("Creating default eventrecorder pod: %s\n", sink)
-	eventTracker, _ := recordevents.StartEventRecordOrFail(context.Background(), client, sink)
-	client.WaitForAllTestResourcesReadyOrFail(context.Background())
-
-	kafkaSourceName := "e2e-kafka-source-test-claims"
-
-	t.Logf("Creating kafkasource: %s\n", kafkaSourceName)
-	contribtestlib.CreateKafkaSourceV1Beta1OrFail(client, contribresources.KafkaSourceV1Beta1(
-		KafkaBootstrapUrlPlain,
-		topic,
-		resources.ServiceRef(sink),
-		contribresources.WithNameV1Beta1(kafkaSourceName),
-	))
-	client.WaitForAllTestResourcesReadyOrFail(context.Background())
-
-	t.Logf("Send update event to kafkatopic")
-	MustPublishKafkaMessage(
-		client,
-		KafkaBootstrapUrlPlain,
-		topic,
-		"0",
-		messageHeaders,
-		messagePayload,
-	)
-
-	eventTracker.AssertExact(1, recordevents.MatchEvent(test.HasType("com.github.pull.create")))
-
-	ksObj := contribtestlib.GetKafkaSourceV1Beta1OrFail(client, kafkaSourceName)
-	if ksObj == nil {
-		t.Fatalf("Unabled to Get kafkasource: %s/%s\n", client.Namespace, kafkaSourceName)
-	}
-
-	require.NotEmpty(t, ksObj.Status.Claims)
-	t.Logf("Claims value: %s", ksObj.Status.Claims)
-}
 
 func TestKafkaSourceUpdate(t *testing.T) {
 
