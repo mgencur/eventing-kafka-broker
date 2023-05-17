@@ -476,7 +476,7 @@ func marshalJSON(val interface{}) string {
 
 func KafkaSourceWithEventAfterUpdate(kafkaSource string, kafkaSink string) *feature.Feature {
 
-	f := feature.NewFeatureNamed("KafkaSourceWithAuth")
+	f := feature.NewFeatureNamed("KafkaSourceWithEventAfterUpdate")
 
 	eventshubReceiver := feature.MakeRandomK8sName("eventshub-receiver")
 	eventshubSender := feature.MakeRandomK8sName("eventshub-sender")
@@ -497,7 +497,11 @@ func KafkaSourceWithEventAfterUpdate(kafkaSource string, kafkaSink string) *feat
 
 	f.Requirement("install eventshub sender for kafka sink", eventshub.Install(eventshubSender, options...))
 
-	f.Assert("sink receives event", matchEvent(eventshubReceiver, HasData(e.Data())))
+	matcher := AllOf(
+		HasData(e.Data()),
+		HasTime(e.Time()),
+	)
+	f.Assert("sink receives event", matchEvent(eventshubReceiver, matcher))
 
 	return f
 }

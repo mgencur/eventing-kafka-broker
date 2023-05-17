@@ -188,7 +188,7 @@ func TestKafkaSourceUpdate(t *testing.T) {
 	kafkaSource := feature.MakeRandomK8sName("kafkaSource")
 	kafkaSink := feature.MakeRandomK8sName("kafkaSink")
 
-	// First, send an arbitrary binary event to Kafka and let KafkaSource
+	// First, send an arbitrary event to Kafka and let KafkaSource
 	// forward the event to the sink.
 	env.Test(ctx, t, features.KafkaSourceTLS(kafkaSource, kafkaSink))
 	// Second, use the same KafkaSource, update it, send a new event to
