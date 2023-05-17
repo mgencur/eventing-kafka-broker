@@ -474,11 +474,7 @@ func marshalJSON(val interface{}) string {
 	return string(data)
 }
 
-func testKafkaSourceAfterUpdate(
-	kafkaSource string,
-	kafkaSink string,
-	senderOpts []eventshub.EventsHubOption,
-	matcher EventMatcher) *feature.Feature {
+func KafkaSourceWithEventAfterUpdate(kafkaSource string, kafkaSink string) *feature.Feature {
 
 	f := feature.NewFeatureNamed("KafkaSourceWithAuth")
 
@@ -487,33 +483,26 @@ func testKafkaSourceAfterUpdate(
 
 	f.Setup("install eventshub receiver", eventshub.Install(eventshubReceiver, eventshub.StartReceiver))
 
-	f.Setup("update kafka source", UpdateKafkaSource(kafkaSource, eventshubReceiver))
+	f.Setup("update kafka source", ModifyKafkaSource(kafkaSource, eventshubReceiver))
 	f.Setup("kafka source is ready", kafkasource.IsReady(kafkaSource))
+
+	e := cetest.FullEvent()
 
 	options := []eventshub.EventsHubOption{
 		eventshub.StartSenderToResource(kafkasink.GVR(), kafkaSink),
 		eventshub.AddSequence,
 		eventshub.SendMultipleEvents(1, time.Millisecond),
+		eventshub.InputEvent(e),
 	}
-	options = append(options, senderOpts...)
+
 	f.Requirement("install eventshub sender for kafka sink", eventshub.Install(eventshubSender, options...))
 
-	f.Assert("sink receives event", matchEvent(eventshubReceiver, matcher))
+	f.Assert("sink receives event", matchEvent(eventshubReceiver, HasData(e.Data())))
 
 	return f
 }
 
-func KafkaSourceUpdate(kafkaSource, kafkaSink string) *feature.Feature {
-	e := cetest.FullEvent()
-	senderOptions := []eventshub.EventsHubOption{
-		eventshub.InputEvent(e),
-	}
-	matcher := HasData(e.Data())
-
-	return testKafkaSourceAfterUpdate(kafkaSource, kafkaSink, senderOptions, matcher)
-}
-
-func UpdateKafkaSource(kafkaSourceName, sink string) feature.StepFn {
+func ModifyKafkaSource(kafkaSourceName, sink string) feature.StepFn {
 	return func(ctx context.Context, t feature.T) {
 		ksObj, err := waitForKafkaSourceToBeReconciled(ctx, kafkaSourceName)
 		if err != nil {

@@ -194,5 +194,5 @@ func TestKafkaSourceUpdate(t *testing.T) {
 	// Second, use the same KafkaSource, update it, send a new event to
 	// Kafka (through the same KafkaSink using same Kafka Topic). And verify that
 	// the new event is delivered properly.
-	env.Test(ctx, t, features.KafkaSourceUpdate(kafkaSource, kafkaSink))
+	env.Test(ctx, t, features.KafkaSourceWithEventAfterUpdate(kafkaSource, kafkaSink))
 }
