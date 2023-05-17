@@ -29,9 +29,12 @@ import (
 	cetypes "github.com/cloudevents/sdk-go/v2/types"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 	testpkg "knative.dev/eventing-kafka-broker/test/pkg"
 	"knative.dev/eventing-kafka-broker/test/rekt/features/featuressteps"
 	"knative.dev/eventing-kafka-broker/test/rekt/resources/kafkasink"
+	"knative.dev/eventing/test/lib/duck"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 	kubeclient "knative.dev/pkg/client/injection/kube/client"
 	"knative.dev/pkg/system"
@@ -45,6 +48,7 @@ import (
 
 	internalscg "knative.dev/eventing-kafka-broker/control-plane/pkg/apis/internals/kafka/eventing/v1alpha1"
 	sources "knative.dev/eventing-kafka-broker/control-plane/pkg/apis/sources/v1beta1"
+	sourcesv1beta1 "knative.dev/eventing-kafka-broker/control-plane/pkg/apis/sources/v1beta1"
 	kafkaclient "knative.dev/eventing-kafka-broker/control-plane/pkg/client/injection/client"
 	sourcesclient "knative.dev/eventing-kafka-broker/control-plane/pkg/client/injection/client"
 	consumergroupclient "knative.dev/eventing-kafka-broker/control-plane/pkg/client/internals/kafka/injection/client"
@@ -347,9 +351,11 @@ func matchEvent(sink string, matcher EventMatcher) feature.StepFn {
 	}
 }
 
-func KafkaSourceBinaryEvent(kafkaSource, kafkaSink string) *feature.Feature {
+func KafkaSourceBinaryEvent() *feature.Feature {
+	kafkaSource := feature.MakeRandomK8sName("kafkaSource")
+	kafkaSink := feature.MakeRandomK8sName("kafkaSink")
 	senderOptions := []eventshub.EventsHubOption{
-		eventshub.InputHeader("ce-specversion", "1.0"),
+		eventshub.InputHeader("ce-specversion", cloudevents.VersionV1),
 		eventshub.InputHeader("ce-type", "com.github.pull.create"),
 		eventshub.InputHeader("ce-source", "github.com/cloudevents/spec/pull"),
 		eventshub.InputHeader("ce-subject", "123"),
@@ -383,7 +389,7 @@ func KafkaSourceStructuredEvent() *feature.Feature {
 	senderOptions := []eventshub.EventsHubOption{
 		eventshub.InputHeader("content-type", "application/cloudevents+json"),
 		eventshub.InputBody(marshalJSON(map[string]interface{}{
-			"specversion":     "1.0",
+			"specversion":     cloudevents.VersionV1,
 			"type":            "com.github.pull.create",
 			"source":          "https://github.com/cloudevents/spec/pull",
 			"subject":         "123",
@@ -420,7 +426,7 @@ func KafkaSourceWithExtensions() *feature.Feature {
 	senderOptions := []eventshub.EventsHubOption{
 		eventshub.InputHeader("content-type", "application/cloudevents+json"),
 		eventshub.InputBody(marshalJSON(map[string]interface{}{
-			"specversion": "1.0",
+			"specversion": cloudevents.VersionV1,
 			"type":        "com.github.pull.create",
 			"source":      "https://github.com/cloudevents/spec/pull",
 			"id":          "A234-1234-1234",
@@ -441,9 +447,7 @@ func KafkaSourceWithExtensions() *feature.Feature {
 	return testKafkaSourceAuth(PlainMech, kafkaSource, kafkaSink, senderOptions, nil, kafkaSourceExtensions, matcher)
 }
 
-func KafkaSourceTLS() *feature.Feature {
-	kafkaSource := feature.MakeRandomK8sName("kafkaSource")
-	kafkaSink := feature.MakeRandomK8sName("kafkaSink")
+func KafkaSourceTLS(kafkaSource, kafkaSink string) *feature.Feature {
 	e := cetest.FullEvent()
 	senderOptions := []eventshub.EventsHubOption{
 		eventshub.InputEvent(e),
@@ -483,7 +487,8 @@ func testKafkaSourceAfterUpdate(
 
 	f.Setup("install eventshub receiver", eventshub.Install(eventshubReceiver, eventshub.StartReceiver))
 
-	// TODO: Update Source with new eventshubReceiver, and PlainMech
+	f.Setup("update kafka source", UpdateKafkaSource(kafkaSource, eventshubReceiver))
+	f.Setup("kafka source is ready", kafkasource.IsReady(kafkaSource))
 
 	options := []eventshub.EventsHubOption{
 		eventshub.StartSenderToResource(kafkasink.GVR(), kafkaSink),
@@ -499,21 +504,71 @@ func testKafkaSourceAfterUpdate(
 }
 
 func KafkaSourceUpdate(kafkaSource, kafkaSink string) *feature.Feature {
+	e := cetest.FullEvent()
 	senderOptions := []eventshub.EventsHubOption{
-		eventshub.InputHeader("ce-specversion", cloudevents.VersionV1),
-		eventshub.InputHeader("ce-type", "com.github.pull.create"),
-		eventshub.InputHeader("ce-source", "github.com/cloudevents/spec/pull"),
-		eventshub.InputHeader("ce-id", "A234-1234-1234"),
-		eventshub.InputHeader("ce-comexampleextension1", "update"),
-		eventshub.InputBody(marshalJSON(map[string]string{
-			"value": "5",
-		})),
+		eventshub.InputEvent(e),
 	}
-	matcher := AllOf(
-		HasSource("github.com/cloudevents/spec/pull"),
-		HasData([]byte(`{"value":"5"}`)),
-		HasExtension("ce-comexampleextension1", "update"),
-	)
+	matcher := HasData(e.Data())
 
 	return testKafkaSourceAfterUpdate(kafkaSource, kafkaSink, senderOptions, matcher)
+}
+
+func UpdateKafkaSource(kafkaSourceName, sink string) feature.StepFn {
+	return func(ctx context.Context, t feature.T) {
+		ksObj, err := waitForKafkaSourceToBeReconciled(ctx, kafkaSourceName)
+		if err != nil {
+			t.Fatalf("Failed waiting for KafkaSource to be reconciled: %v", ksObj)
+		}
+
+		// Update KafkaSource spec
+		ksObj.Spec.Sink.Ref = service.AsKReference(sink)
+		ksObj.Spec.KafkaAuthSpec.BootstrapServers = testingpkg.BootstrapServersSslArr
+		ksObj.Spec.KafkaAuthSpec.Net.TLS.Enable = false
+		ksObj.Spec.KafkaAuthSpec.Net.SASL.Enable = false
+
+		err = updateKafkaSource(ctx, ksObj)
+		if err != nil {
+			t.Fatalf("Failed to update v1beta1 KafkaSource %q: %v", ksObj.Name, err)
+		}
+
+		_, err = waitForKafkaSourceToBeReconciled(ctx, kafkaSourceName)
+		if err != nil {
+			t.Fatalf("Failed waiting for KafkaSource to be reconciled: %v", ksObj)
+		}
+	}
+}
+
+func waitForKafkaSourceToBeReconciled(ctx context.Context, kafkaSourceName string) (*sourcesv1beta1.KafkaSource, error) {
+	var ksObj *sourcesv1beta1.KafkaSource
+	interval, timeout := environment.PollTimingsFromContext(ctx)
+	err := wait.Poll(interval, timeout, func() (done bool, err error) {
+		ns := environment.FromContext(ctx).Namespace()
+		ksObj, err := kafkaclient.Get(ctx).SourcesV1beta1().
+			KafkaSources(ns).
+			Get(ctx, kafkaSourceName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return ksObj.Status.IsReady() && ksObj.Status.ObservedGeneration == ksObj.Generation, nil
+	})
+
+	return ksObj, err
+}
+
+func updateKafkaSource(ctx context.Context, ksObj *sourcesv1beta1.KafkaSource) error {
+	return duck.RetryWebhookErrors(func(i int) error {
+		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			ns := environment.FromContext(ctx).Namespace()
+			latestKafkaSource, err := kafkaclient.Get(ctx).SourcesV1beta1().
+				KafkaSources(ns).
+				Get(ctx, ksObj.Name, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+			ksObj.Spec.DeepCopyInto(&latestKafkaSource.Spec)
+			kafkaclient.Get(ctx).SourcesV1beta1().
+				KafkaSources(ns).Update(context.Background(), latestKafkaSource, metav1.UpdateOptions{})
+			return err
+		})
+	})
 }
