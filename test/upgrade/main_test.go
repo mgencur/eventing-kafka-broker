@@ -24,15 +24,12 @@ import (
 	"log"
 	"os"
 	"testing"
-
 	// Uncomment the following line to load the gcp plugin (only required to authenticate against GKE clusters).
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	pkgTest "knative.dev/pkg/test"
 
-	"knative.dev/pkg/injection"
 	_ "knative.dev/pkg/system/testing"
 	"knative.dev/pkg/test/zipkin"
-
-	pkgTest "knative.dev/pkg/test"
 	"knative.dev/reconciler-test/pkg/environment"
 )
 
@@ -41,13 +38,15 @@ var global environment.GlobalEnvironment
 func TestMain(m *testing.M) {
 	flag.Parse()
 
-	cfg, err := pkgTest.Flags.ClientConfig.GetRESTConfig()
+	restConfig, err := pkgTest.Flags.ClientConfig.GetRESTConfig()
 	if err != nil {
 		log.Fatal("Error building client config: ", err)
 	}
-	ctx, startInformers := injection.EnableInjectionOrDie(nil, cfg) //nolint
 
-	global = environment.NewGlobalEnvironment(ctx, startInformers)
+	global = environment.NewStandardGlobalEnvironment(func(cfg environment.Configuration) environment.Configuration {
+		cfg.Config = restConfig
+		return cfg
+	})
 
 	// Run the tests.
 	os.Exit(func() int {
