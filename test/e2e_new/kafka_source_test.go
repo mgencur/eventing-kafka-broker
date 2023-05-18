@@ -41,6 +41,7 @@ func TestKafkaSourceCreateSecretsAfterKafkaSource(t *testing.T) {
 		knative.WithLoggingConfig,
 		knative.WithTracingConfig,
 		k8s.WithEventListener,
+		environment.WithPollTimings(PollInterval, PollTimeout),
 		environment.Managed(t),
 	)
 
@@ -56,6 +57,7 @@ func TestKafkaSourceDeletedFromContractConfigMaps(t *testing.T) {
 		knative.WithLoggingConfig,
 		knative.WithTracingConfig,
 		k8s.WithEventListener,
+		environment.WithPollTimings(PollInterval, PollTimeout),
 		environment.Managed(t),
 	)
 	t.Cleanup(env.Finish)
@@ -74,6 +76,7 @@ func TestKafkaSourceScale(t *testing.T) {
 		knative.WithLoggingConfig,
 		knative.WithTracingConfig,
 		k8s.WithEventListener,
+		environment.WithPollTimings(PollInterval, PollTimeout),
 		environment.Managed(t),
 	)
 	t.Cleanup(env.Finish)
@@ -89,6 +92,7 @@ func TestKafkaSourceInitialOffsetEarliest(t *testing.T) {
 		knative.WithLoggingConfig,
 		knative.WithTracingConfig,
 		k8s.WithEventListener,
+		environment.WithPollTimings(PollInterval, PollTimeout),
 		environment.Managed(t),
 	)
 
