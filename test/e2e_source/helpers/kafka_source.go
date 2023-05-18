@@ -46,7 +46,7 @@ type SourceTestScope func(auth, testCase, version string) bool
 
 // AssureKafkaSourceConsumesMsgNoEvent assures that KafkaSource reads messages
 // that were not cloud events.
-func AssureKafkaSourceConsumesMsgNoEvent(t *testing.T, scope SourceTestScope) {
+func AssureKafkaSourceConsumesMsgNoEvent(t *testing.T) {
 	tests := map[string]struct {
 		messageKey     string
 		messageHeaders map[string]string
@@ -116,10 +116,6 @@ func AssureKafkaSourceConsumesMsgNoEvent(t *testing.T, scope SourceTestScope) {
 		name := testcase + "_" + authName
 		for _, version := range []string{"v1beta1"} {
 			testName := name + "-" + version
-			if !scope(authName, testcase, version) {
-				t.Log("Skipping the test case, because it's out of configured scope: ", testName)
-				continue
-			}
 			t.Run(testName, func(t *testing.T) {
 				testKafkaSource(t, name, version, test.messageKey, test.messageHeaders, test.messagePayload, test.matcherGen, KafkaBootstrapUrlPlain, test.extensions)
 			})
