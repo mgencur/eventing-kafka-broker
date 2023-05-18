@@ -59,7 +59,7 @@ func runChannelSmokeTest(t *testing.T) {
 }
 
 func runSourceSmokeTest(t *testing.T) {
-	helpers.AssureKafkaSourceIsOperational(t, func(auth, testCase, version string) bool {
+	helpers.AssureKafkaSourceConsumesMsgNoEvent(t, func(auth, testCase, version string) bool {
 		return auth == "plain" && (testCase == "structured" || testCase == "binary")
 	})
 }

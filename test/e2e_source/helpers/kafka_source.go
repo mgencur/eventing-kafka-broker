@@ -18,7 +18,6 @@ package helpers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -27,9 +26,6 @@ import (
 
 	. "github.com/cloudevents/sdk-go/v2/test"
 	"github.com/google/uuid"
-	corev1 "k8s.io/api/core/v1"
-
-	"knative.dev/eventing/pkg/utils"
 	testlib "knative.dev/eventing/test/lib"
 	"knative.dev/eventing/test/lib/recordevents"
 	"knative.dev/eventing/test/lib/resources"
@@ -40,21 +36,17 @@ import (
 
 const (
 	KafkaBootstrapUrlPlain = "my-cluster-kafka-bootstrap.kafka.svc:9092"
-	kafkaBootstrapUrlTLS   = "my-cluster-kafka-bootstrap.kafka.svc:9093"
-
-	KafkaClusterName      = "my-cluster"
-	KafkaClusterNamespace = "kafka"
-
-	kafkaSASLSecret = "strimzi-sasl-secret"
-	kafkaTLSSecret  = "strimzi-tls-secret"
+	KafkaClusterName       = "my-cluster"
+	KafkaClusterNamespace  = "kafka"
 )
 
 // SourceTestScope returns true if we should proceed with given
 // test case.
 type SourceTestScope func(auth, testCase, version string) bool
 
-// AssureKafkaSourceIsOperational assures that KafkaSource works as intended.
-func AssureKafkaSourceIsOperational(t *testing.T, scope SourceTestScope) {
+// AssureKafkaSourceConsumesMsgNoEvent assures that KafkaSource reads messages
+// that were not cloud events.
+func AssureKafkaSourceConsumesMsgNoEvent(t *testing.T, scope SourceTestScope) {
 	tests := map[string]struct {
 		messageKey     string
 		messageHeaders map[string]string
@@ -118,11 +110,6 @@ func AssureKafkaSourceIsOperational(t *testing.T, scope SourceTestScope) {
 		},
 	}
 
-	auth := authSetup{
-		bootStrapServer: KafkaBootstrapUrlPlain,
-		SASLEnabled:     false,
-		TLSEnabled:      false,
-	}
 	authName := "plain"
 	for testcase, test := range tests {
 		test := test
@@ -134,80 +121,16 @@ func AssureKafkaSourceIsOperational(t *testing.T, scope SourceTestScope) {
 				continue
 			}
 			t.Run(testName, func(t *testing.T) {
-				testKafkaSource(t, name, version, test.messageKey, test.messageHeaders, test.messagePayload, test.matcherGen, auth, test.extensions)
+				testKafkaSource(t, name, version, test.messageKey, test.messageHeaders, test.messagePayload, test.matcherGen, KafkaBootstrapUrlPlain, test.extensions)
 			})
 		}
 	}
 }
 
-type authSetup struct {
-	bootStrapServer string
-	SASLEnabled     bool
-	TLSEnabled      bool
-}
-
-func withAuthEnablementV1Beta1(auth authSetup) contribresources.KafkaSourceV1Beta1Option {
-	// We test with sasl512 and enable tls with it, so check tls first
-	if auth.TLSEnabled {
-		return func(ks *sourcesv1beta1.KafkaSource) {
-			ks.Spec.KafkaAuthSpec.Net.TLS.Enable = true
-			ks.Spec.KafkaAuthSpec.Net.TLS.CACert.SecretKeyRef = &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: kafkaTLSSecret,
-				},
-				Key: "ca.crt",
-			}
-			ks.Spec.KafkaAuthSpec.Net.TLS.Cert.SecretKeyRef = &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: kafkaTLSSecret,
-				},
-				Key: "user.crt",
-			}
-			ks.Spec.KafkaAuthSpec.Net.TLS.Key.SecretKeyRef = &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: kafkaTLSSecret,
-				},
-				Key: "user.key",
-			}
-		}
-	}
-	if auth.SASLEnabled {
-		return func(ks *sourcesv1beta1.KafkaSource) {
-			ks.Spec.KafkaAuthSpec.Net.SASL.Enable = true
-			ks.Spec.KafkaAuthSpec.Net.SASL.User.SecretKeyRef = &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: kafkaSASLSecret,
-				},
-				Key: "user",
-			}
-			ks.Spec.KafkaAuthSpec.Net.SASL.Password.SecretKeyRef = &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: kafkaSASLSecret,
-				},
-				Key: "password",
-			}
-			ks.Spec.KafkaAuthSpec.Net.SASL.Type.SecretKeyRef = &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: kafkaSASLSecret,
-				},
-				Key: "saslType",
-			}
-			ks.Spec.KafkaAuthSpec.Net.TLS.Enable = true
-			ks.Spec.KafkaAuthSpec.Net.TLS.CACert.SecretKeyRef = &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: kafkaSASLSecret,
-				},
-				Key: "ca.crt",
-			}
-		}
-	}
-	return func(ks *sourcesv1beta1.KafkaSource) {}
-}
-
 func testKafkaSource(t *testing.T,
 	name string, version string, messageKey string, messageHeaders map[string]string, messagePayload string,
 	matcherGen func(cloudEventsSourceName, cloudEventsEventType string) EventMatcher,
-	auth authSetup, extensions map[string]string) {
+	bootStrapServer string, extensions map[string]string) {
 
 	name = fmt.Sprintf("%s-%s", name, version)
 
@@ -221,18 +144,6 @@ func testKafkaSource(t *testing.T,
 	client := testlib.Setup(t, true)
 	defer testlib.TearDown(client)
 
-	if auth.SASLEnabled {
-		_, err := utils.CopySecret(client.Kube.CoreV1(), "knative-eventing", kafkaSASLSecret, client.Namespace, "default")
-		if err != nil {
-			t.Fatalf("could not copy SASL secret(%s): %v", kafkaSASLSecret, err)
-		}
-	}
-	if auth.TLSEnabled {
-		_, err := utils.CopySecret(client.Kube.CoreV1(), "knative-eventing", kafkaTLSSecret, client.Namespace, "default")
-		if err != nil {
-			t.Fatalf("could not copy secret(%s): %v", kafkaTLSSecret, err)
-		}
-	}
 	MustCreateTopic(client, KafkaClusterName, KafkaClusterNamespace, kafkaTopicName, 10)
 	if len(recordEventPodName) > 63 {
 		recordEventPodName = recordEventPodName[:63]
@@ -248,12 +159,11 @@ func testKafkaSource(t *testing.T,
 	switch version {
 	case "v1beta1":
 		contribtestlib.CreateKafkaSourceV1Beta1OrFail(client, contribresources.KafkaSourceV1Beta1(
-			auth.bootStrapServer,
+			bootStrapServer,
 			kafkaTopicName,
 			resources.ServiceRef(recordEventPodName),
 			contribresources.WithNameV1Beta1(kafkaSourceName),
 			contribresources.WithConsumerGroupV1Beta1(consumerGroup),
-			withAuthEnablementV1Beta1(auth),
 			contribresources.WithExtensionsV1Beta1(extensions),
 		))
 		cloudEventsSourceName = sourcesv1beta1.KafkaEventSource(client.Namespace, kafkaSourceName, kafkaTopicName)
@@ -267,12 +177,4 @@ func testKafkaSource(t *testing.T,
 	MustPublishKafkaMessage(client, KafkaBootstrapUrlPlain, kafkaTopicName, messageKey, messageHeaders, messagePayload)
 
 	eventTracker.AssertExact(1, recordevents.MatchEvent(matcherGen(cloudEventsSourceName, cloudEventsEventType)))
-}
-
-func mustJsonMarshal(t *testing.T, val interface{}) string {
-	data, err := json.Marshal(val)
-	if err != nil {
-		t.Errorf("unexpected error, %v", err)
-	}
-	return string(data)
 }
