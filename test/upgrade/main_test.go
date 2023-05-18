@@ -20,7 +20,6 @@
 package upgrade
 
 import (
-	"flag"
 	"log"
 	"os"
 	"testing"
@@ -36,8 +35,6 @@ import (
 var global environment.GlobalEnvironment
 
 func TestMain(m *testing.M) {
-	flag.Parse()
-
 	restConfig, err := pkgTest.Flags.ClientConfig.GetRESTConfig()
 	if err != nil {
 		log.Fatal("Error building client config: ", err)
