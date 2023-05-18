@@ -338,7 +338,7 @@ func KafkaSourceWithAuth(auth string,
 	}
 
 	f.Setup("install kafka source", kafkasource.Install(kafkaSource, kafkaSourceOpts...))
-	f.Setup("kafka source is ready", kafkasource.IsReady(kafkaSource))
+	f.Setup("kafka source is ready", kafkasource.IsReady(kafkaSource, environment.DefaultPollInterval, 5*time.Minute))
 
 	options := []eventshub.EventsHubOption{
 		eventshub.StartSenderToResource(kafkasink.GVR(), kafkaSink),
@@ -440,6 +440,7 @@ func KafkaSourceWithExtensions() *feature.Feature {
 			"id":          "A234-1234-1234",
 		})),
 	}
+	ksinkOpts := []manifest.CfgFn{kafkasink.WithContentMode("structured")}
 	kafkaSourceExtensions := map[string]string{
 		"comexampleextension1": "value",
 		"comexampleothervalue": "5",
@@ -452,7 +453,7 @@ func KafkaSourceWithExtensions() *feature.Feature {
 		HasExtension("comexampleothervalue", "5"),
 	)
 
-	return KafkaSourceWithAuth(PlainMech, kafkaSource, kafkaSink, senderOptions, nil, kafkaSourceExtensions, matcher)
+	return KafkaSourceWithAuth(PlainMech, kafkaSource, kafkaSink, senderOptions, ksinkOpts, kafkaSourceExtensions, matcher)
 }
 
 func KafkaSourceTLS(kafkaSource, kafkaSink string) *feature.Feature {
