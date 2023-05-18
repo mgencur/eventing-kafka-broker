@@ -280,7 +280,8 @@ func compareConsumerGroup(source string, cmp func(*internalscg.ConsumerGroup) er
 	}
 }
 
-func KafkaSourceWithAuth(auth string,
+func KafkaSourceWithAuth(name string,
+	auth string,
 	kafkaSource string,
 	kafkaSink string,
 	senderOpts []eventshub.EventsHubOption,
@@ -288,7 +289,7 @@ func KafkaSourceWithAuth(auth string,
 	kafkaSourceExtensions map[string]string,
 	matcher cetest.EventMatcher) *feature.Feature {
 
-	f := feature.NewFeatureNamed("KafkaSourceWithAuth")
+	f := feature.NewFeatureNamed(name)
 
 	topic := feature.MakeRandomK8sName("topic")
 	eventshubReceiver := feature.MakeRandomK8sName("eventshub-receiver")
@@ -387,7 +388,7 @@ func KafkaSourceBinaryEvent() *feature.Feature {
 		HasExtension("comexampleothervalue", "5"),
 	)
 
-	return KafkaSourceWithAuth(PlainMech, kafkaSource, kafkaSink, senderOptions, nil, nil, matcher)
+	return KafkaSourceWithAuth("KafkaSourceBinaryEvent", PlainMech, kafkaSource, kafkaSink, senderOptions, nil, nil, matcher)
 }
 
 func KafkaSourceStructuredEvent() *feature.Feature {
@@ -425,7 +426,7 @@ func KafkaSourceStructuredEvent() *feature.Feature {
 		HasExtension("comexampleothervalue", "5"),
 	)
 
-	return KafkaSourceWithAuth(PlainMech, kafkaSource, kafkaSink, senderOptions, ksinkOpts, nil, matcher)
+	return KafkaSourceWithAuth("KafkaSourceStructuredEvent", PlainMech, kafkaSource, kafkaSink, senderOptions, ksinkOpts, nil, matcher)
 }
 
 func KafkaSourceWithExtensions() *feature.Feature {
@@ -453,7 +454,7 @@ func KafkaSourceWithExtensions() *feature.Feature {
 		HasExtension("comexampleothervalue", "5"),
 	)
 
-	return KafkaSourceWithAuth(PlainMech, kafkaSource, kafkaSink, senderOptions, ksinkOpts, kafkaSourceExtensions, matcher)
+	return KafkaSourceWithAuth("KafkaSourceWithExtensions", PlainMech, kafkaSource, kafkaSink, senderOptions, ksinkOpts, kafkaSourceExtensions, matcher)
 }
 
 func KafkaSourceTLS(kafkaSource, kafkaSink string) *feature.Feature {
@@ -463,7 +464,7 @@ func KafkaSourceTLS(kafkaSource, kafkaSink string) *feature.Feature {
 	}
 	matcher := HasData(e.Data())
 
-	return KafkaSourceWithAuth(TLSMech, kafkaSource, kafkaSink, senderOptions, nil, nil, matcher)
+	return KafkaSourceWithAuth("KafkaSourceTLS", TLSMech, kafkaSource, kafkaSink, senderOptions, nil, nil, matcher)
 }
 
 func KafkaSourceSASL() *feature.Feature {
@@ -475,7 +476,7 @@ func KafkaSourceSASL() *feature.Feature {
 	}
 	matcher := HasData(e.Data())
 
-	return KafkaSourceWithAuth(SASLMech, kafkaSource, kafkaSink, senderOptions, nil, nil, matcher)
+	return KafkaSourceWithAuth("KafkaSourceSASL", SASLMech, kafkaSource, kafkaSink, senderOptions, nil, nil, matcher)
 }
 
 func marshalJSON(val interface{}) string {
