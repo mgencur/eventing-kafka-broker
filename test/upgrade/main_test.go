@@ -43,6 +43,9 @@ func TestMain(m *testing.M) {
 		log.Fatal("Error building client config: ", err)
 	}
 
+	// Getting the rest config explicitly and passing it further will prevent re-initializing the flagset
+	// in NewStandardGlobalEnvironment(). The upgrade tests use knative.dev/pkg/test which initializes the
+	// flagset as well.
 	global = environment.NewStandardGlobalEnvironment(func(cfg environment.Configuration) environment.Configuration {
 		cfg.Config = restConfig
 		return cfg
