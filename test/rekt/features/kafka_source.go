@@ -295,6 +295,16 @@ func kafkaSourceFeature(name string,
 
 	f := feature.NewFeatureNamed(name)
 
+	kafkaSink, receiver := kafkaSourceFeatureSetup(f, kafkaSourceCfg, kafkaSinkCfg)
+	kafkaSourceFeatureAssert(f, kafkaSink, receiver, senderOpts, matcher)
+
+	return f
+}
+
+func kafkaSourceFeatureSetup(f *feature.Feature,
+	kafkaSourceCfg kafkaSourceConfig,
+	kafkaSinkCfg kafkaSinkConfig) (string, string) {
+
 	if kafkaSourceCfg.topic == "" {
 		kafkaSourceCfg.topic = feature.MakeRandomK8sName("topic")
 	}
@@ -308,7 +318,7 @@ func kafkaSourceFeature(name string,
 	}
 
 	receiver := feature.MakeRandomK8sName("eventshub-receiver")
-	sender := feature.MakeRandomK8sName("eventshub-sender")
+
 	secretName := feature.MakeRandomK8sName("secret")
 
 	f.Setup("install kafka topic", kafkatopic.Install(kafkaSourceCfg.topic))
@@ -355,15 +365,19 @@ func kafkaSourceFeature(name string,
 	f.Setup("install kafka source", kafkasource.Install(kafkaSourceCfg.sourceName, kafkaSourceOpts...))
 	f.Setup("kafka source is ready", kafkasource.IsReady(kafkaSourceCfg.sourceName))
 
+	return kafkaSinkCfg.sinkName, receiver
+}
+
+func kafkaSourceFeatureAssert(f *feature.Feature, kafkaSink, receiver string, senderOpts []eventshub.EventsHubOption, matcher cetest.EventMatcher) {
+	sender := feature.MakeRandomK8sName("eventshub-sender")
 	options := []eventshub.EventsHubOption{
-		eventshub.StartSenderToResource(kafkasink.GVR(), kafkaSinkCfg.sinkName),
+		eventshub.StartSenderToResource(kafkasink.GVR(), kafkaSink),
 	}
 	options = append(options, senderOpts...)
+
 	f.Requirement("install eventshub sender", eventshub.Install(sender, options...))
 
 	f.Assert("eventshub receiver gets event", matchEvent(receiver, matcher))
-
-	return f
 }
 
 func matchEvent(sink string, matcher EventMatcher) feature.StepFn {

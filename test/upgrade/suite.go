@@ -17,6 +17,7 @@
 package upgrade
 
 import (
+	"knative.dev/eventing/test/upgrade"
 	pkgupgrade "knative.dev/pkg/test/upgrade"
 	"knative.dev/reconciler-test/pkg/environment"
 
@@ -25,6 +26,16 @@ import (
 
 // Suite defines the whole upgrade test suite for Eventing Kafka.
 func Suite(glob environment.GlobalEnvironment) pkgupgrade.Suite {
+	g := upgrade.FeatureGroupWithUpgradeTests{
+		// A feature that will run the same test post-upgrade and post-downgrade.
+		upgrade.NewFeatureSmoke(InMemoryChannelFeature(glob)),
+		// A feature that will be created pre-upgrade and verified/removed post-upgrade.
+		//upgrade.NewFeatureOnlyUpgrade(InMemoryChannelFeature(global)),
+		// A feature that will be created pre-upgrade, verified post-upgrade, verified and removed post-downgrade.
+		//upgrade.NewFeatureUpgradeDowngrade(InMemoryChannelFeature(global)),
+		// A feature that will be created post-upgrade, verified and removed post-downgrade.
+		//upgrade.NewFeatureOnlyDowngrade(InMemoryChannelFeature(global)),
+	}
 	return pkgupgrade.Suite{
 		Tests: pkgupgrade.Tests{
 			PreUpgrade: []pkgupgrade.Operation{
