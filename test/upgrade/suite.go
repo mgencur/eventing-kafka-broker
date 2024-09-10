@@ -28,13 +28,13 @@ import (
 func Suite(glob environment.GlobalEnvironment) pkgupgrade.Suite {
 	g := upgrade.FeatureGroupWithUpgradeTests{
 		// A feature that will run the same test post-upgrade and post-downgrade.
-		upgrade.NewFeatureSmoke(InMemoryChannelFeature(glob)),
+		upgrade.NewFeatureSmoke(KafkaSourceBinaryEventFeature(glob)),
 		// A feature that will be created pre-upgrade and verified/removed post-upgrade.
-		//upgrade.NewFeatureOnlyUpgrade(InMemoryChannelFeature(global)),
+		upgrade.NewFeatureOnlyUpgrade(KafkaSourceBinaryEventFeature(glob)),
 		// A feature that will be created pre-upgrade, verified post-upgrade, verified and removed post-downgrade.
-		//upgrade.NewFeatureUpgradeDowngrade(InMemoryChannelFeature(global)),
+		upgrade.NewFeatureUpgradeDowngrade(KafkaSourceBinaryEventFeature(glob)),
 		// A feature that will be created post-upgrade, verified and removed post-downgrade.
-		//upgrade.NewFeatureOnlyDowngrade(InMemoryChannelFeature(global)),
+		upgrade.NewFeatureOnlyDowngrade(KafkaSourceBinaryEventFeature(glob)),
 	}
 	return pkgupgrade.Suite{
 		Tests: pkgupgrade.Tests{

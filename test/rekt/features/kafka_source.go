@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"strings"
 
-	"knative.dev/eventing/test/rekt/features/featureflags"
-
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	. "github.com/cloudevents/sdk-go/v2/test"
 	cetest "github.com/cloudevents/sdk-go/v2/test"
@@ -32,6 +30,7 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"knative.dev/eventing/pkg/eventingtls/eventingtlstesting"
+	"knative.dev/eventing/test/rekt/features/featureflags"
 	"knative.dev/pkg/apis"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 	kubeclient "knative.dev/pkg/client/injection/kube/client"
@@ -45,11 +44,10 @@ import (
 	"knative.dev/reconciler-test/pkg/manifest"
 	"knative.dev/reconciler-test/pkg/resources/service"
 
-	"knative.dev/eventing/test/rekt/features/source"
-
 	testpkg "knative.dev/eventing-kafka-broker/test/pkg"
 	"knative.dev/eventing-kafka-broker/test/rekt/features/featuressteps"
 	"knative.dev/eventing-kafka-broker/test/rekt/resources/kafkasink"
+	"knative.dev/eventing/test/rekt/features/source"
 
 	internalscg "knative.dev/eventing-kafka-broker/control-plane/pkg/apis/internals/kafka/eventing/v1alpha1"
 	sources "knative.dev/eventing-kafka-broker/control-plane/pkg/apis/sources/v1beta1"
@@ -275,69 +273,56 @@ func compareConsumerGroup(source string, cmp func(*internalscg.ConsumerGroup) er
 	}
 }
 
-type kafkaSourceConfig struct {
-	sourceName string
-	authMech   string
-	topic      string
-	opts       []manifest.CfgFn
+type KafkaSourceConfig struct {
+	SourceName string
+	AuthMech   string
+	Topic      string
+	Opts       []manifest.CfgFn
 }
 
-type kafkaSinkConfig struct {
-	sinkName string
-	opts     []manifest.CfgFn
+type KafkaSinkConfig struct {
+	SinkName string
+	Opts     []manifest.CfgFn
 }
 
-func kafkaSourceFeature(name string,
-	kafkaSourceCfg kafkaSourceConfig,
-	kafkaSinkCfg kafkaSinkConfig,
-	customizeFunc CustomizeEventFunc) *feature.Feature {
+func KafkaSourceFeatureSetup(f *feature.Feature,
+	kafkaSourceCfg KafkaSourceConfig,
+	kafkaSinkCfg KafkaSinkConfig) (string, string) {
 
-	f := feature.NewFeatureNamed(name)
-
-	kafkaSink, receiver := kafkaSourceFeatureSetup(f, kafkaSourceCfg, kafkaSinkCfg)
-	kafkaSourceFeatureAssert(f, kafkaSink, receiver, customizeFunc)
-
-	return f
-}
-
-func kafkaSourceFeatureSetup(f *feature.Feature,
-	kafkaSourceCfg kafkaSourceConfig,
-	kafkaSinkCfg kafkaSinkConfig) (string, string) {
-
-	if kafkaSourceCfg.topic == "" {
-		kafkaSourceCfg.topic = feature.MakeRandomK8sName("topic")
+	if kafkaSourceCfg.Topic == "" {
+		kafkaSourceCfg.Topic = feature.MakeRandomK8sName("topic")
 	}
 
-	if kafkaSinkCfg.sinkName == "" {
-		kafkaSinkCfg.sinkName = feature.MakeRandomK8sName("kafkaSink")
+	if kafkaSinkCfg.SinkName == "" {
+		kafkaSinkCfg.SinkName = feature.MakeRandomK8sName("kafkaSink")
 	}
 
-	if kafkaSourceCfg.sourceName == "" {
-		kafkaSourceCfg.sourceName = feature.MakeRandomK8sName("kafkaSource")
+	if kafkaSourceCfg.SourceName == "" {
+		kafkaSourceCfg.SourceName = feature.MakeRandomK8sName("kafkaSource")
 	}
 
 	receiver := feature.MakeRandomK8sName("eventshub-receiver")
 
 	secretName := feature.MakeRandomK8sName("secret")
 
-	f.Setup("install kafka topic", kafkatopic.Install(kafkaSourceCfg.topic))
-	f.Setup("topic is ready", kafkatopic.IsReady(kafkaSourceCfg.topic))
+	f.Setup("install kafka topic", kafkatopic.Install(kafkaSourceCfg.Topic))
+	f.Setup("topic is ready", kafkatopic.IsReady(kafkaSourceCfg.Topic))
 
 	// Binary content mode is default for Kafka Sink.
-	f.Setup("install kafkasink", kafkasink.Install(kafkaSinkCfg.sinkName, kafkaSourceCfg.topic,
+	f.Setup("install kafkasink", kafkasink.Install(kafkaSinkCfg.SinkName, kafkaSourceCfg.Topic,
 		testpkg.BootstrapServersPlaintextArr,
-		kafkaSinkCfg.opts...))
-	f.Setup("kafkasink is ready", kafkasink.IsReady(kafkaSinkCfg.sinkName))
+		kafkaSinkCfg.Opts...))
+	f.Setup("kafkasink is ready", kafkasink.IsReady(kafkaSinkCfg.SinkName))
 
 	f.Setup("install eventshub receiver", eventshub.Install(receiver, eventshub.StartReceiver))
 
 	kafkaSourceOpts := []manifest.CfgFn{
 		kafkasource.WithSink(service.AsDestinationRef(receiver)),
-		kafkasource.WithTopics([]string{kafkaSourceCfg.topic}),
+		kafkasource.WithTopics([]string{kafkaSourceCfg.Topic}),
 	}
-	kafkaSourceOpts = append(kafkaSourceOpts, kafkaSourceCfg.opts...)
+	kafkaSourceOpts = append(kafkaSourceOpts, kafkaSourceCfg.Opts...)
 
-	switch kafkaSourceCfg.authMech {
+	switch kafkaSourceCfg.AuthMech {
 	case TLSMech:
 		f.Setup("Create TLS secret", featuressteps.CopySecretInTestNamespace(system.Namespace(), TLSSecretName, secretName))
 		kafkaSourceOpts = append(kafkaSourceOpts, kafkasource.WithBootstrapServers(testingpkg.BootstrapServersSslArr),
@@ -361,13 +346,13 @@ func kafkaSourceFeatureSetup(f *feature.Feature,
 		kafkaSourceOpts = append(kafkaSourceOpts, kafkasource.WithBootstrapServers(testingpkg.BootstrapServersPlaintextArr))
 	}
 
-	f.Setup("install kafka source", kafkasource.Install(kafkaSourceCfg.sourceName, kafkaSourceOpts...))
-	f.Setup("kafka source is ready", kafkasource.IsReady(kafkaSourceCfg.sourceName))
+	f.Setup("install kafka source", kafkasource.Install(kafkaSourceCfg.SourceName, kafkaSourceOpts...))
+	f.Setup("kafka source is ready", kafkasource.IsReady(kafkaSourceCfg.SourceName))
 
-	return kafkaSinkCfg.sinkName, receiver
+	return kafkaSinkCfg.SinkName, receiver
 }
 
-func kafkaSourceFeatureAssert(f *feature.Feature, kafkaSink, receiver string, customizeFunc CustomizeEventFunc) {
+func KafkaSourceFeatureAssert(f *feature.Feature, kafkaSink, receiver string, customizeFunc CustomizeEventFunc) {
 	sender := feature.MakeRandomK8sName("eventshub-sender")
 	options := []eventshub.EventsHubOption{
 		eventshub.StartSenderToResource(kafkasink.GVR(), kafkaSink),
@@ -392,8 +377,8 @@ func matchEvent(sink string, matcher EventMatcher) feature.StepFn {
 // and corresponding event matcher that will match the respective event.
 type CustomizeEventFunc func() ([]eventshub.EventsHubOption, EventMatcher)
 
-func KafkaSourceBinaryEvent() *feature.Feature {
-	customizeFunc := func() ([]eventshub.EventsHubOption, EventMatcher) {
+func KafkaSourceBinaryEventCustomizeFunc() CustomizeEventFunc {
+	return func() ([]eventshub.EventsHubOption, EventMatcher) {
 		id := feature.MakeRandomK8sName("id")
 		senderOptions := []eventshub.EventsHubOption{
 			eventshub.InputHeader("ce-specversion", cloudevents.VersionV1),
@@ -421,14 +406,20 @@ func KafkaSourceBinaryEvent() *feature.Feature {
 		)
 		return senderOptions, matcher
 	}
+}
 
-	return kafkaSourceFeature("KafkaSourceBinaryEvent",
-		kafkaSourceConfig{
-			authMech: PlainMech,
+func KafkaSourceBinaryEvent() *feature.Feature {
+	f := feature.NewFeatureNamed("KafkaSourceBinaryEvent")
+
+	kafkaSink, receiver := KafkaSourceFeatureSetup(f,
+		KafkaSourceConfig{
+			AuthMech: PlainMech,
 		},
-		kafkaSinkConfig{},
-		customizeFunc,
+		KafkaSinkConfig{},
 	)
+	KafkaSourceFeatureAssert(f, kafkaSink, receiver, KafkaSourceBinaryEventCustomizeFunc())
+
+	return f
 }
 
 func KafkaSourceBinaryEventWithExtensions() *feature.Feature {
@@ -455,22 +446,24 @@ func KafkaSourceBinaryEventWithExtensions() *feature.Feature {
 		return senderOptions, matcher
 	}
 
-	return kafkaSourceFeature("KafkaSourceBinaryEvent",
-		kafkaSourceConfig{
-			authMech: PlainMech,
-			opts: []manifest.CfgFn{
+	f := feature.NewFeatureNamed("KafkaSourceBinaryEventWithExtensions")
+
+	kafkaSink, receiver := KafkaSourceFeatureSetup(f,
+		KafkaSourceConfig{
+			AuthMech: PlainMech,
+			Opts: []manifest.CfgFn{
 				kafkasource.WithExtensions(map[string]string{
 					"comexampleextension1": "value",
 					"comexampleothervalue": "5",
 				})},
 		},
-		kafkaSinkConfig{},
-		customizeFunc,
+		KafkaSinkConfig{},
 	)
+	KafkaSourceFeatureAssert(f, kafkaSink, receiver, customizeFunc)
 }
 
-func KafkaSourceStructuredEvent() *feature.Feature {
-	customizeFunc := func() ([]eventshub.EventsHubOption, EventMatcher) {
+func KafkaSourceStructuredEventCustomizeFunc() CustomizeEventFunc {
+	return func() ([]eventshub.EventsHubOption, EventMatcher) {
 		id := feature.MakeRandomK8sName("id")
 		eventTime, _ := cetypes.ParseTime("2018-04-05T17:31:00Z")
 		senderOptions := []eventshub.EventsHubOption{
@@ -504,16 +497,20 @@ func KafkaSourceStructuredEvent() *feature.Feature {
 		)
 		return senderOptions, matcher
 	}
+}
 
-	return kafkaSourceFeature("KafkaSourceStructuredEvent",
-		kafkaSourceConfig{
-			authMech: PlainMech,
+func KafkaSourceStructuredEvent() *feature.Feature {
+	f := feature.NewFeatureNamed("KafkaSourceStructuredEvent")
+
+	kafkaSink, receiver := KafkaSourceFeatureSetup(f,
+		KafkaSourceConfig{
+			AuthMech: PlainMech,
 		},
-		kafkaSinkConfig{
-			opts: []manifest.CfgFn{kafkasink.WithContentMode("structured")},
-		},
-		customizeFunc,
+		KafkaSinkConfig{},
 	)
+	KafkaSourceFeatureAssert(f, kafkaSink, receiver, KafkaSourceStructuredEventCustomizeFunc())
+
+	return f
 }
 
 func KafkaSourceWithExtensions() *feature.Feature {
@@ -539,20 +536,24 @@ func KafkaSourceWithExtensions() *feature.Feature {
 		return senderOptions, matcher
 	}
 
-	return kafkaSourceFeature("KafkaSourceWithExtensions",
-		kafkaSourceConfig{
-			authMech: PlainMech,
-			opts: []manifest.CfgFn{
+	f := feature.NewFeatureNamed("KafkaSourceWithExtensions")
+
+	kafkaSink, receiver := KafkaSourceFeatureSetup(f,
+		KafkaSourceConfig{
+			AuthMech: PlainMech,
+			Opts: []manifest.CfgFn{
 				kafkasource.WithExtensions(map[string]string{
 					"comexampleextension1": "value",
 					"comexampleothervalue": "5",
 				})},
 		},
-		kafkaSinkConfig{
-			opts: []manifest.CfgFn{kafkasink.WithContentMode("structured")},
+		KafkaSinkConfig{
+			Opts: []manifest.CfgFn{kafkasink.WithContentMode("structured")},
 		},
-		customizeFunc,
 	)
+	KafkaSourceFeatureAssert(f, kafkaSink, receiver, customizeFunc)
+
+	return f
 }
 
 func KafkaSourceTLS(kafkaSource, kafkaSink, topic string) *feature.Feature {
@@ -570,18 +571,22 @@ func KafkaSourceTLS(kafkaSource, kafkaSink, topic string) *feature.Feature {
 		return senderOptions, matcher
 	}
 
-	return kafkaSourceFeature("KafkaSourceTLS",
-		kafkaSourceConfig{
-			authMech:   TLSMech,
-			topic:      topic,
-			sourceName: kafkaSource,
-			opts:       []manifest.CfgFn{kafkasource.WithOrdering(string(sourcesv1beta1.Ordered))},
+	f := feature.NewFeatureNamed("KafkaSourceTLS")
+
+	kafkaSink, receiver := KafkaSourceFeatureSetup(f,
+		KafkaSourceConfig{
+			AuthMech:   TLSMech,
+			Topic:      topic,
+			SourceName: kafkaSource,
+			Opts:       []manifest.CfgFn{kafkasource.WithOrdering(string(sourcesv1beta1.Ordered))},
 		},
-		kafkaSinkConfig{
-			sinkName: kafkaSink,
+		KafkaSinkConfig{
+			SinkName: kafkaSink,
 		},
-		customizeFunc,
 	)
+	KafkaSourceFeatureAssert(f, kafkaSink, receiver, customizeFunc)
+
+	return f
 }
 
 func KafkaSourceTLSSink() *feature.Feature {
@@ -706,13 +711,17 @@ func KafkaSourceSASL() *feature.Feature {
 		return senderOptions, matcher
 	}
 
-	return kafkaSourceFeature("KafkaSourceSASL",
-		kafkaSourceConfig{
-			authMech: SASLMech,
+	f := feature.NewFeatureNamed("KafkaSourceSASL")
+
+	kafkaSink, receiver := KafkaSourceFeatureSetup(f,
+		KafkaSourceConfig{
+			AuthMech: SASLMech,
 		},
-		kafkaSinkConfig{},
-		customizeFunc,
+		KafkaSinkConfig{},
 	)
+	KafkaSourceFeatureAssert(f, kafkaSink, receiver, customizeFunc)
+
+	return f
 }
 
 func marshalJSON(val interface{}) string {

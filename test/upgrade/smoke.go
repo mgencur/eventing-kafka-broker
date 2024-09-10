@@ -26,8 +26,10 @@ import (
 	"knative.dev/eventing-kafka-broker/test/rekt/features"
 	eventinghelpers "knative.dev/eventing/test/e2e/helpers"
 	testlib "knative.dev/eventing/test/lib"
+	eventingupgrade "knative.dev/eventing/test/upgrade"
 	"knative.dev/pkg/system"
 	"knative.dev/reconciler-test/pkg/environment"
+	"knative.dev/reconciler-test/pkg/feature"
 	"knative.dev/reconciler-test/pkg/k8s"
 	"knative.dev/reconciler-test/pkg/knative"
 )
@@ -60,6 +62,29 @@ func runChannelSmokeTest(t *testing.T) {
 			)
 		})
 	}
+}
+
+func KafkaSourceBinaryEventFeature(glob environment.GlobalEnvironment,
+) *eventingupgrade.DurableFeature {
+	setupF := feature.NewFeature()
+	kafkaSink, receiver := features.KafkaSourceFeatureSetup(setupF,
+		features.KafkaSourceConfig{
+			AuthMech: features.PlainMech,
+		},
+		features.KafkaSinkConfig{},
+	)
+
+	verifyF := feature.NewFeature()
+	features.KafkaSourceFeatureAssert(verifyF, kafkaSink, receiver, features.KafkaSourceBinaryEventCustomizeFunc())
+
+	opts := []environment.EnvOpts{
+		knative.WithKnativeNamespace(system.Namespace()),
+		knative.WithLoggingConfig,
+		knative.WithTracingConfig,
+		k8s.WithEventListener,
+	}
+
+	return &eventingupgrade.DurableFeature{SetupF: setupF, VerifyF: verifyF, Global: glob, EnvOpts: opts}
 }
 
 func runSourceSmokeTest(glob environment.GlobalEnvironment, t *testing.T) {
