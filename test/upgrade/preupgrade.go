@@ -21,7 +21,6 @@ import (
 	"knative.dev/eventing-kafka-broker/control-plane/pkg/kafka"
 	"knative.dev/eventing-kafka-broker/test/e2e_sink"
 	pkgupgrade "knative.dev/pkg/test/upgrade"
-	"knative.dev/reconciler-test/pkg/environment"
 )
 
 // BrokerPreUpgradeTest tests broker basic operations before upgrade.
@@ -51,12 +50,4 @@ func SinkPreUpgradeTest() pkgupgrade.Operation {
 	return pkgupgrade.NewOperation("SinkPreUpgradeTest", func(c pkgupgrade.Context) {
 		e2e_sink.RunTestKafkaSink(c.T, eventing.ModeBinary, nil)
 	})
-}
-
-// SourcePreUpgradeTest tests source operations before upgrade.
-func SourcePreUpgradeTest(glob environment.GlobalEnvironment) pkgupgrade.Operation {
-	return pkgupgrade.NewOperation("SourcePreUpgradeTest",
-		func(c pkgupgrade.Context) {
-			runSourceSmokeTest(glob, c.T)
-		})
 }

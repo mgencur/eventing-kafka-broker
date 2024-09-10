@@ -26,14 +26,12 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	testlib "knative.dev/eventing/test/lib"
-	"knative.dev/pkg/system"
-	pkgupgrade "knative.dev/pkg/test/upgrade"
-	"knative.dev/reconciler-test/pkg/environment"
-
 	eventing "knative.dev/eventing-kafka-broker/control-plane/pkg/apis/eventing/v1alpha1"
 	"knative.dev/eventing-kafka-broker/control-plane/pkg/kafka"
 	"knative.dev/eventing-kafka-broker/test/e2e_sink"
+	testlib "knative.dev/eventing/test/lib"
+	"knative.dev/pkg/system"
+	pkgupgrade "knative.dev/pkg/test/upgrade"
 )
 
 // BrokerPostUpgradeTest tests channel operations after upgrade.
@@ -81,14 +79,6 @@ func SinkPostUpgradeTest() pkgupgrade.Operation {
 			e2e_sink.RunTestKafkaSink(t, eventing.ModeBinary, nil)
 		})
 	})
-}
-
-// SourcePostUpgradeTest tests source operations after upgrade.
-func SourcePostUpgradeTest(glob environment.GlobalEnvironment) pkgupgrade.Operation {
-	return pkgupgrade.NewOperation("SourcePostUpgradeTest",
-		func(c pkgupgrade.Context) {
-			runSourceSmokeTest(glob, c.T)
-		})
 }
 
 func verifyPostInstall(t *testing.T) {

@@ -27,37 +27,39 @@ import (
 // Suite defines the whole upgrade test suite for Eventing Kafka.
 func Suite(glob environment.GlobalEnvironment) pkgupgrade.Suite {
 	g := upgrade.FeatureGroupWithUpgradeTests{
-		// A feature that will run the same test post-upgrade and post-downgrade.
+		// Features that will run the same test post-upgrade and post-downgrade.
 		upgrade.NewFeatureSmoke(KafkaSourceBinaryEventFeature(glob)),
-		// A feature that will be created pre-upgrade and verified/removed post-upgrade.
+		upgrade.NewFeatureSmoke(KafkaSourceStructuredEventFeature(glob)),
+		// Features that will be created pre-upgrade and verified/removed post-upgrade.
 		upgrade.NewFeatureOnlyUpgrade(KafkaSourceBinaryEventFeature(glob)),
-		// A feature that will be created pre-upgrade, verified post-upgrade, verified and removed post-downgrade.
+		upgrade.NewFeatureOnlyUpgrade(KafkaSourceStructuredEventFeature(glob)),
+		// Features that will be created pre-upgrade, verified post-upgrade, verified and removed post-downgrade.
 		upgrade.NewFeatureUpgradeDowngrade(KafkaSourceBinaryEventFeature(glob)),
-		// A feature that will be created post-upgrade, verified and removed post-downgrade.
+		upgrade.NewFeatureUpgradeDowngrade(KafkaSourceStructuredEventFeature(glob)),
+		// Features that will be created post-upgrade, verified and removed post-downgrade.
 		upgrade.NewFeatureOnlyDowngrade(KafkaSourceBinaryEventFeature(glob)),
+		upgrade.NewFeatureOnlyDowngrade(KafkaSourceStructuredEventFeature(glob)),
 	}
 	return pkgupgrade.Suite{
 		Tests: pkgupgrade.Tests{
 			PreUpgrade: []pkgupgrade.Operation{
+				//TODO: call g
 				BrokerPreUpgradeTest(),
 				NamespacedBrokerPreUpgradeTest(),
 				ChannelPreUpgradeTest(),
 				SinkPreUpgradeTest(),
-				SourcePreUpgradeTest(glob),
 			},
 			PostUpgrade: []pkgupgrade.Operation{
 				BrokerPostUpgradeTest(),
 				NamespacedBrokerPostUpgradeTest(),
 				ChannelPostUpgradeTest(),
 				SinkPostUpgradeTest(),
-				SourcePostUpgradeTest(glob),
 			},
 			PostDowngrade: []pkgupgrade.Operation{
 				BrokerPostDowngradeTest(),
 				NamespacedBrokerPostDowngradeTest(),
 				ChannelPostDowngradeTest(),
 				SinkPostDowngradeTest(),
-				SourcePostDowngradeTest(glob),
 			},
 			Continual: ContinualTests(),
 		},

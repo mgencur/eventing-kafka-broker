@@ -87,6 +87,29 @@ func KafkaSourceBinaryEventFeature(glob environment.GlobalEnvironment,
 	return &eventingupgrade.DurableFeature{SetupF: setupF, VerifyF: verifyF, Global: glob, EnvOpts: opts}
 }
 
+func KafkaSourceStructuredEventFeature(glob environment.GlobalEnvironment,
+) *eventingupgrade.DurableFeature {
+	setupF := feature.NewFeature()
+	kafkaSink, receiver := features.KafkaSourceFeatureSetup(setupF,
+		features.KafkaSourceConfig{
+			AuthMech: features.PlainMech,
+		},
+		features.KafkaSinkConfig{},
+	)
+
+	verifyF := feature.NewFeature()
+	features.KafkaSourceFeatureAssert(verifyF, kafkaSink, receiver, features.KafkaSourceStructuredEventCustomizeFunc())
+
+	opts := []environment.EnvOpts{
+		knative.WithKnativeNamespace(system.Namespace()),
+		knative.WithLoggingConfig,
+		knative.WithTracingConfig,
+		k8s.WithEventListener,
+	}
+
+	return &eventingupgrade.DurableFeature{SetupF: setupF, VerifyF: verifyF, Global: glob, EnvOpts: opts}
+}
+
 func runSourceSmokeTest(glob environment.GlobalEnvironment, t *testing.T) {
 	ctx, env := glob.Environment(
 		knative.WithKnativeNamespace(system.Namespace()),
