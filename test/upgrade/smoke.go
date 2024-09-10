@@ -67,13 +67,7 @@ func runChannelSmokeTest(t *testing.T) {
 func KafkaSourceBinaryEventFeature(glob environment.GlobalEnvironment,
 ) *eventingupgrade.DurableFeature {
 	setupF := feature.NewFeature()
-	kafkaSink, receiver := features.KafkaSourceFeatureSetup(setupF,
-		features.KafkaSourceConfig{
-			AuthMech: features.PlainMech,
-		},
-		features.KafkaSinkConfig{},
-	)
-
+	kafkaSink, receiver := features.KafkaSourceBinaryEventFeatureSetup(setupF)
 	verifyF := feature.NewFeature()
 	features.KafkaSourceFeatureAssert(verifyF, kafkaSink, receiver, features.KafkaSourceBinaryEventCustomizeFunc())
 
@@ -90,13 +84,7 @@ func KafkaSourceBinaryEventFeature(glob environment.GlobalEnvironment,
 func KafkaSourceStructuredEventFeature(glob environment.GlobalEnvironment,
 ) *eventingupgrade.DurableFeature {
 	setupF := feature.NewFeature()
-	kafkaSink, receiver := features.KafkaSourceFeatureSetup(setupF,
-		features.KafkaSourceConfig{
-			AuthMech: features.PlainMech,
-		},
-		features.KafkaSinkConfig{},
-	)
-
+	kafkaSink, receiver := features.KafkaSourceStructuredEventFeatureSetup(setupF)
 	verifyF := feature.NewFeature()
 	features.KafkaSourceFeatureAssert(verifyF, kafkaSink, receiver, features.KafkaSourceStructuredEventCustomizeFunc())
 
