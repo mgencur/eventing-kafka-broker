@@ -1276,6 +1276,7 @@ knative.dev/eventing/test/rekt/features
 knative.dev/eventing/test/rekt/features/broker
 knative.dev/eventing/test/rekt/features/channel
 knative.dev/eventing/test/rekt/features/featureflags
+knative.dev/eventing/test/rekt/features/jobsink
 knative.dev/eventing/test/rekt/features/knconf
 knative.dev/eventing/test/rekt/features/new_trigger_filters
 knative.dev/eventing/test/rekt/features/oidc
@@ -1289,6 +1290,7 @@ knative.dev/eventing/test/rekt/resources/channel_impl
 knative.dev/eventing/test/rekt/resources/containersource
 knative.dev/eventing/test/rekt/resources/delivery
 knative.dev/eventing/test/rekt/resources/eventtype
+knative.dev/eventing/test/rekt/resources/jobsink
 knative.dev/eventing/test/rekt/resources/pingsource
 knative.dev/eventing/test/rekt/resources/subscription
 knative.dev/eventing/test/rekt/resources/trigger

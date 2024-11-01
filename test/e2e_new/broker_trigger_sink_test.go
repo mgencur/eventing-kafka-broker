@@ -54,3 +54,16 @@ func TestBrokerTriggersSink(t *testing.T) {
 
 	env.Test(ctx, t, features.BrokerWithTriggersAndKafkaSink(env))
 }
+
+func TestBrokerWithJobSink(t *testing.T) {
+	t.Parallel()
+
+	ctx, env := global.Environment(
+		knative.WithKnativeNamespace(system.Namespace()),
+		knative.WithLoggingConfig,
+		knative.WithTracingConfig,
+		k8s.WithEventListener,
+	)
+
+	env.Test(ctx, t, features.BrokerWithJobSink(env))
+}
