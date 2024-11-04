@@ -80,6 +80,7 @@ func WithSubscriber(ref *duckv1.KReference, uri string) manifest.CfgFn {
 			sref["kind"] = ref.Kind
 			// skip namespace
 			sref["name"] = ref.Name
+			sref["namespace"] = ref.Namespace
 		}
 	}
 }

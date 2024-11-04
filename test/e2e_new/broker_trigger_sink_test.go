@@ -65,5 +65,20 @@ func TestBrokerWithJobSink(t *testing.T) {
 		k8s.WithEventListener,
 	)
 
-	env.Test(ctx, t, features.BrokerWithJobSink(env))
+	ctx2, env2 := global.Environment(
+		knative.WithKnativeNamespace(system.Namespace()),
+		knative.WithLoggingConfig,
+		knative.WithTracingConfig,
+		k8s.WithEventListener,
+	)
+
+	f, jobSink, sink := features.BrokerWithJobSinkSetup()
+
+	env.Test(ctx, t, f)
+
+	f2, event := features.BrokerWithJobSink(env, jobSink)
+
+	env2.Test(ctx2, t, f2)
+
+	env.Test(ctx, t, features.BrokerWithJobSinkVerify(jobSink, sink, event))
 }

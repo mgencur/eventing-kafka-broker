@@ -73,7 +73,7 @@ func Success() *feature.Feature {
 		Match(assert.MatchStatusCode(202)).
 		AtLeast(1),
 	)
-	f.Assert("At least one Job is complete", AtLeastOneJobIsComplete(jobSink))
+	f.Assert("At least one Job is complete", AtLeastOneJobIsComplete(jobSink, ""))
 
 	return f
 }
@@ -113,7 +113,7 @@ func SuccessTLS() *feature.Feature {
 		Match(assert.MatchStatusCode(202)).
 		AtLeast(1),
 	)
-	f.Assert("At least one Job is complete", AtLeastOneJobIsComplete(jobSink))
+	f.Assert("At least one Job is complete", AtLeastOneJobIsComplete(jobSink, ""))
 
 	return f
 }
@@ -183,19 +183,22 @@ func OIDC() *feature.Feature {
 		MatchReceivedEvent(cetest.HasId(event.ID())).
 		AtLeast(1),
 	)
-	f.Assert("At least one Job is complete", AtLeastOneJobIsComplete(jobSink))
+	f.Assert("At least one Job is complete", AtLeastOneJobIsComplete(jobSink, ""))
 
 	return f
 }
 
-func AtLeastOneJobIsComplete(jobSinkName string) feature.StepFn {
+func AtLeastOneJobIsComplete(jobSinkName string, namespace string) feature.StepFn {
 	return func(ctx context.Context, t feature.T) {
 		interval, timeout := environment.PollTimingsFromContext(ctx)
 
+		if namespace == "" {
+			namespace = environment.FromContext(ctx).Namespace()
+		}
 		var jobs *batchv1.JobList
 		err := wait.PollUntilContextTimeout(ctx, interval, timeout, true, func(ctx context.Context) (done bool, err error) {
 			jobs, err = kubeclient.Get(ctx).BatchV1().
-				Jobs(environment.FromContext(ctx).Namespace()).
+				Jobs(namespace).
 				List(ctx, metav1.ListOptions{
 					LabelSelector: fmt.Sprintf("%s=%s", sinks.JobSinkNameLabel, jobSinkName),
 				})

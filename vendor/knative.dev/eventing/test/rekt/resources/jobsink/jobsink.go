@@ -203,3 +203,13 @@ func AsKReference(name string) *duckv1.KReference {
 		APIVersion: GVR().GroupVersion().String(),
 	}
 }
+
+// AsKReference returns a KReference for a JobSink without namespace.
+func AsKReferenceN(name, namespace string) *duckv1.KReference {
+	return &duckv1.KReference{
+		Kind:       "JobSink",
+		Name:       name,
+		Namespace:  namespace,
+		APIVersion: GVR().GroupVersion().String(),
+	}
+}

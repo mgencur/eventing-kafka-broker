@@ -17,6 +17,7 @@
 package features
 
 import (
+	ceevent "github.com/cloudevents/sdk-go/v2/event"
 	cetest "github.com/cloudevents/sdk-go/v2/test"
 	"github.com/google/uuid"
 	featuresjobsink "knative.dev/eventing/test/rekt/features/jobsink"
@@ -30,19 +31,13 @@ import (
 	"knative.dev/reconciler-test/pkg/feature"
 )
 
-func BrokerWithJobSink(env environment.Environment) *feature.Feature {
+func BrokerWithJobSinkSetup() (*feature.Feature, string, string) {
 	f := feature.NewFeature()
 
 	sink := feature.MakeRandomK8sName("sink")
 	jobSink := feature.MakeRandomK8sName("jobsink")
-	source := feature.MakeRandomK8sName("source")
-	brokerName := feature.MakeRandomK8sName("broker")
-	triggerName := feature.MakeRandomK8sName("trigger")
 
 	sinkURL := &apis.URL{Scheme: "http", Host: sink}
-
-	event := cetest.FullEvent()
-	event.SetID(uuid.NewString())
 
 	f.Setup("install forwarder sink", eventshub.Install(sink, eventshub.StartReceiver))
 	f.Setup("install job sink", jobsink.Install(jobSink, jobsink.WithForwarderJob(sinkURL.String())))
@@ -50,11 +45,24 @@ func BrokerWithJobSink(env environment.Environment) *feature.Feature {
 	f.Setup("jobsink is addressable", jobsink.IsAddressable(jobSink))
 	f.Setup("jobsink is ready", jobsink.IsAddressable(jobSink))
 
+	return f, jobSink, sink
+}
+
+func BrokerWithJobSink(env environment.Environment, jobSink string) (*feature.Feature, ceevent.Event) {
+	f := feature.NewFeature()
+
+	source := feature.MakeRandomK8sName("source")
+	brokerName := feature.MakeRandomK8sName("broker")
+	triggerName := feature.MakeRandomK8sName("trigger")
+
+	event := cetest.FullEvent()
+	event.SetID(uuid.NewString())
+
 	f.Setup("Install broker", broker.Install(brokerName, broker.WithEnvConfig()...))
 	f.Setup("Broker is ready", broker.IsReady(brokerName))
 
 	f.Setup("create trigger", trigger.Install(triggerName, trigger.WithBrokerName(brokerName),
-		trigger.WithSubscriber(jobsink.AsKReference(jobSink), ""),
+		trigger.WithSubscriber(jobsink.AsKReferenceN(jobSink, env.Namespace()), ""),
 	))
 	f.Setup("trigger is ready", trigger.IsReady(triggerName))
 
@@ -62,18 +70,24 @@ func BrokerWithJobSink(env environment.Environment) *feature.Feature {
 		eventshub.StartSenderToResource(broker.GVR(), brokerName),
 		eventshub.InputEvent(event)))
 
-	f.Assert("event delivered", assert.OnStore(sink).
-		MatchReceivedEvent(cetest.HasId(event.ID())).
-		AtLeast(1),
-	)
-
 	f.Assert("source sent the event", assert.OnStore(source).
 		Match(assert.MatchKind(eventshub.EventResponse)).
 		Match(assert.MatchStatusCode(202)).
 		AtLeast(1),
 	)
 
-	f.Assert("at least one Job is complete", featuresjobsink.AtLeastOneJobIsComplete(jobSink))
+	return f, event
+}
+
+func BrokerWithJobSinkVerify(jobSink, sink string, event ceevent.Event) *feature.Feature {
+	f := feature.NewFeature()
+
+	f.Assert("event delivered", assert.OnStore(sink).
+		MatchReceivedEvent(cetest.HasId(event.ID())).
+		AtLeast(1),
+	)
+
+	f.Assert("at least one Job is complete", featuresjobsink.AtLeastOneJobIsComplete(jobSink, ""))
 
 	return f
 }

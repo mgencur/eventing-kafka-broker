@@ -50,7 +50,7 @@ spec:
     {{ if .subscriber.ref }}
     ref:
       kind: {{ .subscriber.ref.kind }}
-      namespace: {{ .namespace }}
+      namespace: {{ .subscriber.ref.namespace }}
       name: {{ .subscriber.ref.name }}
       apiVersion: {{ .subscriber.ref.apiVersion }}
     {{ end }}
